@@ -1,0 +1,163 @@
+import type { AliasTable, Rule } from "../types";
+
+export type SearchMatch = {
+  rule: Rule;
+  score: number;
+  via: "alias" | "title" | "fuzzy" | "body";
+};
+
+// Ranking tiers, highest first. Each tier occupies its own score band so a
+// weaker tier can never outrank a stronger one, but the recency multiplier
+// (capped below) can still reorder entries *within* or across adjacent
+// bands — that's the "recently viewed float up" behavior.
+const SCORE_EXACT_ALIAS = 1000;
+const SCORE_PREFIX_ALIAS = 900;
+const SCORE_EXACT_TITLE = 800;
+const SCORE_PREFIX_TITLE = 700;
+const SCORE_FUZZY_ALIAS_MAX = 620;
+const SCORE_FUZZY_TITLE_MAX = 600;
+const SCORE_BODY_MATCH = 200;
+
+const RECENCY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const RECENCY_MAX_MULTIPLIER = 1.25;
+
+function normalize(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Subsequence fuzzy match: every character of `query` must appear in
+ * `target` in order (not necessarily contiguous). Returns a 0..1 score
+ * (1 = best) or null if query isn't a subsequence at all. Rewards
+ * contiguous runs and early matches, like typical fuzzy-filter UX.
+ */
+function fuzzyScore(query: string, target: string): number | null {
+  if (query.length === 0) return null;
+  let qi = 0;
+  let run = 0;
+  let bestRun = 0;
+  let firstMatchIndex = -1;
+  let gaps = 0;
+  for (let ti = 0; ti < target.length && qi < query.length; ti++) {
+    if (target[ti] === query[qi]) {
+      if (firstMatchIndex === -1) firstMatchIndex = ti;
+      run += 1;
+      bestRun = Math.max(bestRun, run);
+      qi += 1;
+    } else if (firstMatchIndex !== -1) {
+      run = 0;
+      gaps += 1;
+    }
+  }
+  if (qi < query.length) return null; // not all query chars found in order
+
+  const coverage = query.length / target.length;
+  const contiguity = bestRun / query.length;
+  const earliness = 1 - firstMatchIndex / Math.max(target.length, 1);
+  const gapPenalty = Math.max(0, 1 - gaps * 0.08);
+
+  return Math.max(
+    0,
+    Math.min(1, (coverage * 0.3 + contiguity * 0.4 + earliness * 0.2) * gapPenalty + 0.1)
+  );
+}
+
+function recencyMultiplier(ruleId: string, recency: Record<string, number>, now: number): number {
+  const viewedAt = recency[ruleId];
+  if (!viewedAt) return 1;
+  const age = now - viewedAt;
+  if (age < 0 || age > RECENCY_WINDOW_MS) return 1;
+  const freshness = 1 - age / RECENCY_WINDOW_MS; // 1 = just now, 0 = 7 days ago
+  return 1 + freshness * (RECENCY_MAX_MULTIPLIER - 1);
+}
+
+export function buildAliasIndex(aliases: AliasTable): Map<string, string> {
+  const index = new Map<string, string>();
+  for (const [alias, ruleId] of Object.entries(aliases)) {
+    index.set(normalize(alias), ruleId);
+  }
+  return index;
+}
+
+export function search(
+  rawQuery: string,
+  rules: Rule[],
+  aliasIndex: Map<string, string>,
+  recency: Record<string, number>,
+  now: number = Date.now(),
+  limit = 8
+): SearchMatch[] {
+  const query = normalize(rawQuery);
+  if (!query) return [];
+
+  const rulesById = new Map(rules.map((r) => [r.id, r]));
+  const best = new Map<string, SearchMatch>();
+
+  const consider = (rule: Rule | undefined, score: number, via: SearchMatch["via"]) => {
+    if (!rule) return;
+    const existing = best.get(rule.id);
+    if (!existing || score > existing.score) {
+      best.set(rule.id, { rule, score, via });
+    }
+  };
+
+  // Tier 1/2: alias hits (exact, then prefix).
+  for (const [aliasText, ruleId] of aliasIndex) {
+    if (aliasText === query) {
+      consider(rulesById.get(ruleId), SCORE_EXACT_ALIAS, "alias");
+    } else if (aliasText.startsWith(query) && query.length >= 2) {
+      // Shorter aliases matched by a short prefix are a stronger signal.
+      const specificity = query.length / aliasText.length;
+      consider(rulesById.get(ruleId), SCORE_PREFIX_ALIAS * (0.7 + 0.3 * specificity), "alias");
+    } else if (query.length >= 3) {
+      const fs = fuzzyScore(query, aliasText);
+      if (fs !== null) {
+        consider(rulesById.get(ruleId), fs * SCORE_FUZZY_ALIAS_MAX, "fuzzy");
+      }
+    }
+  }
+
+  // Tiers 3-6: title / body, direct against the rule set.
+  for (const rule of rules) {
+    const title = normalize(rule.title);
+    if (title === query) {
+      consider(rule, SCORE_EXACT_TITLE, "title");
+      continue;
+    }
+    if (title.startsWith(query)) {
+      consider(rule, SCORE_PREFIX_TITLE, "title");
+      continue;
+    }
+    const titleFuzzy = fuzzyScore(query, title);
+    if (titleFuzzy !== null) {
+      consider(rule, titleFuzzy * SCORE_FUZZY_TITLE_MAX, "fuzzy");
+    }
+    if (query.length >= 3 && normalize(rule.body).includes(query)) {
+      consider(rule, SCORE_BODY_MATCH, "body");
+    }
+  }
+
+  return Array.from(best.values())
+    .map((match) => ({ ...match, score: match.score * recencyMultiplier(match.rule.id, recency, now) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
+const RECENCY_STORAGE_KEY = "rulesOverlay:recency";
+const RECENCY_MAX_ENTRIES = 50;
+
+export async function getRecency(): Promise<Record<string, number>> {
+  const stored = await chrome.storage.local.get(RECENCY_STORAGE_KEY);
+  return (stored[RECENCY_STORAGE_KEY] as Record<string, number> | undefined) ?? {};
+}
+
+/** Records a rule view and evicts the oldest entries past the storage cap. */
+export async function recordView(ruleId: string): Promise<void> {
+  const recency = await getRecency();
+  recency[ruleId] = Date.now();
+
+  const entries = Object.entries(recency).sort((a, b) => b[1] - a[1]);
+  const capped = Object.fromEntries(entries.slice(0, RECENCY_MAX_ENTRIES));
+
+  await chrome.storage.local.set({ [RECENCY_STORAGE_KEY]: capped });
+}

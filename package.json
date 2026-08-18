@@ -1,0 +1,22 @@
+{
+  "name": "rules-overlay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hotkey-triggered D&D 5e SRD rules lookup overlay for tabletop RPG players.",
+  "type": "module",
+  "scripts": {
+    "build:rules": "tsx scripts/build-rules.ts",
+    "build:icons": "node scripts/gen-icons.mjs",
+    "build:ext": "node esbuild.config.mjs",
+    "build": "npm run build:rules && npm run build:icons && npm run build:ext",
+    "dev": "npm run build:rules && npm run build:icons && node esbuild.config.mjs --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.270",
+    "@types/node": "^26.2.0",
+    "esbuild": "^0.23.1",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}

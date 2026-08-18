@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Rules Overlay for D&D 5e",
+  "version": "0.1.0",
+  "description": "Press a hotkey, type a rule or table-slang, get the D&D 5e SRD answer inline. Bundled, offline, no network calls.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage"],
+  "commands": {
+    "toggle-overlay": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Space",
+        "mac": "Command+Shift+Space"
+      },
+      "description": "Open/close the rules overlay"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

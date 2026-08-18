@@ -1,0 +1,352 @@
+{
+  "ac": "armor-class",
+  "armor class": "armor-class",
+  "whats my ac": "armor-class",
+  "how do i calculate ac": "armor-class",
+  "armour class": "armor-class",
+
+  "attack roll": "attack-rolls",
+  "to hit roll": "attack-rolls",
+  "how do attacks work": "attack-rolls",
+  "do i hit": "attack-rolls",
+
+  "adv": "advantage-and-disadvantage",
+  "dis": "advantage-and-disadvantage",
+  "advantage": "advantage-and-disadvantage",
+  "disadvantage": "advantage-and-disadvantage",
+  "adv and dis": "advantage-and-disadvantage",
+  "advantiage": "advantage-and-disadvantage",
+  "dissadvantage": "advantage-and-disadvantage",
+  "does advantage stack": "advantage-and-disadvantage",
+
+  "crit": "critical-hits",
+  "nat 20": "critical-hits",
+  "natural 20": "critical-hits",
+  "critical hit": "critical-hits",
+  "do crits double everything": "critical-hits",
+  "critical hit rules": "critical-hits",
+
+  "half cover": "cover",
+  "full cover": "cover",
+  "three quarters cover": "cover",
+  "cover rules": "cover",
+  "total cover": "cover",
+
+  "aoo": "opportunity-attack",
+  "attack of opportunity": "opportunity-attack",
+  "opportunity attack": "opportunity-attack",
+  "oa": "opportunity-attack",
+  "free attack when someone runs away": "opportunity-attack",
+  "oppurtunity attack": "opportunity-attack",
+  "atack of opportunity": "opportunity-attack",
+  "opportunity attck": "opportunity-attack",
+
+  "reaction": "reactions",
+  "when can i use my reaction": "reactions",
+  "reaction rules": "reactions",
+
+  "actions": "actions-in-combat",
+  "what can i do on my turn": "actions-in-combat",
+  "turn actions": "actions-in-combat",
+  "combat actions": "actions-in-combat",
+
+  "attack action": "attack-action",
+  "make an attack": "attack-action",
+
+  "cast a spell": "cast-a-spell-action",
+  "casting a spell action": "cast-a-spell-action",
+
+  "dash": "dash",
+  "double move": "dash",
+  "run action": "dash",
+
+  "disengage": "disengage",
+  "withdraw": "disengage",
+  "leave without getting hit": "disengage",
+  "disengage action": "disengage",
+
+  "dodge": "dodge",
+  "dodge action": "dodge",
+  "what does dodge do": "dodge",
+
+  "help action": "help-action",
+  "assist action": "help-action",
+
+  "hide": "hide-action",
+  "stealth check": "hide-action",
+  "sneak": "hide-action",
+  "hide action": "hide-action",
+
+  "ready": "ready-action",
+  "readied action": "ready-action",
+  "hold action": "ready-action",
+  "ready action": "ready-action",
+
+  "search": "search-action",
+  "look for something": "search-action",
+  "search action": "search-action",
+
+  "use object": "use-an-object-action",
+  "interact with object": "use-an-object-action",
+  "second object interaction": "use-an-object-action",
+
+  "twf": "two-weapon-fighting",
+  "dual wield": "two-weapon-fighting",
+  "two weapon fighting": "two-weapon-fighting",
+  "off hand attack": "two-weapon-fighting",
+  "bonus action attack": "two-weapon-fighting",
+
+  "shooting in melee": "ranged-attacks-in-melee",
+  "ranged attack in melee": "ranged-attacks-in-melee",
+  "disadvantage on ranged in melee": "ranged-attacks-in-melee",
+  "ranged attacks next to enemy": "ranged-attacks-in-melee",
+
+  "grapple": "grappling",
+  "how do i grapple": "grappling",
+  "pin someone": "grappling",
+  "grapple check": "grappling",
+  "grapel": "grappling",
+  "grappling rules": "grappling",
+
+  "shove": "shoving-a-creature",
+  "push": "shoving-a-creature",
+  "shove prone": "shoving-a-creature",
+  "knock prone": "shoving-a-creature",
+  "shove rules": "shoving-a-creature",
+
+  "mounted combat": "mounted-combat",
+  "riding a horse in combat": "mounted-combat",
+  "mount rules": "mounted-combat",
+  "fighting on horseback": "mounted-combat",
+
+  "underwater": "underwater-combat",
+  "fighting underwater": "underwater-combat",
+  "swimming combat": "underwater-combat",
+  "underwater rules": "underwater-combat",
+
+  "flanking": "flanking",
+  "flank rules": "flanking",
+  "does 5e have flanking": "flanking",
+  "can two people attack the same enemy for advantage": "flanking",
+
+  "initiative": "initiative",
+  "roll for initiative": "initiative",
+  "turn order": "initiative",
+  "iniative": "initiative",
+
+  "speed": "movement-and-speed",
+  "movement": "movement-and-speed",
+  "how far can i move": "movement-and-speed",
+  "moving through allies space": "movement-and-speed",
+
+  "difficult terrain": "difficult-terrain",
+  "rough terrain": "difficult-terrain",
+  "what counts as difficult terrain": "difficult-terrain",
+
+  "jump": "jumping",
+  "how far can i jump": "jumping",
+  "long jump": "jumping",
+  "high jump": "jumping",
+  "jumping rules": "jumping",
+
+  "climb": "climbing-and-swimming",
+  "swim": "climbing-and-swimming",
+  "climbing rules": "climbing-and-swimming",
+  "swimming rules": "climbing-and-swimming",
+  "crawling": "climbing-and-swimming",
+
+  "falling damage": "falling",
+  "fall damage": "falling",
+  "how much damage from falling": "falling",
+  "fell rules": "falling",
+
+  "darkvision": "vision-and-light",
+  "dim light": "vision-and-light",
+  "darkness rules": "vision-and-light",
+  "obscured": "vision-and-light",
+  "lightly obscured": "vision-and-light",
+  "heavily obscured": "vision-and-light",
+
+  "surprise round": "surprise",
+  "surprised": "surprise",
+  "ambush rules": "surprise",
+  "surprise attack": "surprise",
+
+  "hp": "hit-points-and-damage",
+  "hit points": "hit-points-and-damage",
+  "what happens at 0 hp": "hit-points-and-damage",
+  "zero hp": "hit-points-and-damage",
+
+  "temp hp": "temporary-hit-points",
+  "temporary hit points": "temporary-hit-points",
+  "do temp hp stack": "temporary-hit-points",
+
+  "healing rules": "healing",
+  "how does healing work": "healing",
+  "can healing go over max hp": "healing",
+
+  "death save": "death-saving-throws",
+  "death saving throw": "death-saving-throws",
+  "dying rules": "death-saving-throws",
+  "3 death saves": "death-saving-throws",
+  "death saves": "death-saving-throws",
+
+  "instant death": "instant-death",
+  "massive damage": "instant-death",
+  "insta kill": "instant-death",
+
+  "stabilize": "stabilizing-a-creature",
+  "stabilizing": "stabilizing-a-creature",
+  "medicine check to stabilize": "stabilizing-a-creature",
+  "stop dying": "stabilizing-a-creature",
+
+  "exhaustion": "exhaustion",
+  "exhaustion levels": "exhaustion",
+  "tired condition": "exhaustion",
+  "exhaustion table": "exhaustion",
+
+  "short rest": "short-rest",
+  "sr": "short-rest",
+  "hit dice": "short-rest",
+
+  "long rest": "long-rest",
+  "lr": "long-rest",
+  "8 hour rest": "long-rest",
+
+  "blinded": "blinded",
+  "blind condition": "blinded",
+
+  "charmed": "charmed",
+  "charm condition": "charmed",
+
+  "deafened": "deafened",
+  "deaf condition": "deafened",
+
+  "frightened": "frightened",
+  "fear condition": "frightened",
+  "scared condition": "frightened",
+
+  "grappled condition": "grappled",
+  "grappled": "grappled",
+
+  "incapacitated": "incapacitated",
+  "incapacitated condition": "incapacitated",
+
+  "invisible": "invisible",
+  "invisibility condition": "invisible",
+
+  "paralyzed": "paralyzed",
+  "paralysis": "paralyzed",
+  "paralyzed condition": "paralyzed",
+
+  "petrified": "petrified",
+  "turned to stone": "petrified",
+  "petrification": "petrified",
+
+  "poisoned": "poisoned",
+  "poison condition": "poisoned",
+
+  "prone": "prone",
+  "knocked down": "prone",
+  "prone condition": "prone",
+
+  "restrained": "restrained",
+  "restrained condition": "restrained",
+
+  "stunned": "stunned",
+  "stunned condition": "stunned",
+
+  "unconscious": "unconscious",
+  "knocked out": "unconscious",
+  "unconcious": "unconscious",
+  "passed out": "unconscious",
+
+  "casting time": "casting-time",
+  "how long does it take to cast": "casting-time",
+  "bonus action spell": "casting-time",
+
+  "spell range": "spell-range",
+  "how far does a spell reach": "spell-range",
+
+  "v s m": "spell-components",
+  "verbal somatic material": "spell-components",
+  "spell components": "spell-components",
+  "material component": "spell-components",
+  "somatic component": "spell-components",
+
+  "spell duration": "spell-duration",
+  "how long does a spell last": "spell-duration",
+
+  "conc": "concentration",
+  "concentration": "concentration",
+  "concentration save": "concentration",
+  "con save to concentrate": "concentration",
+  "consentration": "concentration",
+  "consintration": "concentration",
+  "breaking concentration": "concentration",
+
+  "spell targets": "spell-targets",
+  "can i target myself": "spell-targets",
+
+  "spell attack": "spell-attack-rolls",
+  "spell attack roll": "spell-attack-rolls",
+
+  "stacking spells": "combining-spell-effects",
+  "do spells stack": "combining-spell-effects",
+
+  "casting in armor": "casting-in-armor",
+  "can i cast in armor": "casting-in-armor",
+
+  "spell slots": "spell-slots",
+  "how many spells can i cast": "spell-slots",
+  "spell slot table": "spell-slots",
+
+  "ritual": "rituals",
+  "ritual casting": "rituals",
+  "casting as a ritual": "rituals",
+
+  "prepared spells": "known-vs-prepared-spells",
+  "known spells": "known-vs-prepared-spells",
+  "how many spells can i prepare": "known-vs-prepared-spells",
+
+  "ability check": "ability-checks",
+  "skill check": "ability-checks",
+  "dc": "ability-checks",
+  "difficulty class": "ability-checks",
+
+  "skills list": "skills",
+  "what skill do i use": "skills",
+  "expertise": "skills",
+
+  "prof bonus": "proficiency-bonus",
+  "proficiency bonus": "proficiency-bonus",
+  "prof bonus by level": "proficiency-bonus",
+
+  "saving throw": "saving-throws",
+  "save dc": "saving-throws",
+  "spell save dc": "saving-throws",
+
+  "passive perception": "passive-checks",
+  "passive check": "passive-checks",
+  "passive investigation": "passive-checks",
+
+  "helping a check": "working-together",
+  "assist a check": "working-together",
+  "working together": "working-together",
+
+  "group check": "group-checks",
+  "group ability check": "group-checks",
+
+  "contest": "contests",
+  "opposed check": "contests",
+  "contested check": "contests",
+
+  "carrying capacity": "carrying-capacity",
+  "how much can i carry": "carrying-capacity",
+  "encumbrance": "carrying-capacity",
+  "how much weight can i carry": "carrying-capacity",
+
+  "inspiration": "inspiration",
+  "heroic inspiration": "inspiration",
+  "how does inspiration work": "inspiration"
+}
