@@ -348,5 +348,24 @@
 
   "inspiration": "inspiration",
   "heroic inspiration": "inspiration",
-  "how does inspiration work": "inspiration"
+  "how does inspiration work": "inspiration",
+
+  "weapons list": "weapons",
+  "weapons table": "weapons",
+  "weapon proficiency": "weapons",
+
+  "weapon properties": "weapon-properties",
+  "finesse": "weapon-properties",
+  "versatile": "weapon-properties",
+  "what does heavy mean": "weapon-properties",
+  "what does loading mean": "weapon-properties",
+
+  "sword": "longsword",
+  "bow": "shortbow",
+  "crossbow": "light-crossbow",
+  "axe": "handaxe",
+  "great sword": "greatsword",
+  "war hammer": "warhammer",
+  "shiv": "dagger",
+  "quiver": "shortbow"
 }

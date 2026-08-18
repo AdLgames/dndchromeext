@@ -609,6 +609,386 @@
     ]
   },
   {
+    "id": "battleaxe",
+    "title": "Battleaxe",
+    "category": "equipment",
+    "body": "Martial melee. 1d8 slashing. Versatile (1d10).",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "blowgun",
+    "title": "Blowgun",
+    "category": "equipment",
+    "body": "Martial ranged. 1 piercing. Ammunition (range 25/100), Loading.",
+    "seeAlso": [
+      "weapon-properties",
+      "ranged-attacks-in-melee"
+    ]
+  },
+  {
+    "id": "club",
+    "title": "Club",
+    "category": "equipment",
+    "body": "Simple melee. 1d4 bludgeoning. Light.",
+    "seeAlso": [
+      "weapon-properties",
+      "two-weapon-fighting"
+    ]
+  },
+  {
+    "id": "dagger",
+    "title": "Dagger",
+    "category": "equipment",
+    "body": "Simple melee. 1d4 piercing. Finesse, Light, Thrown (range 20/60).",
+    "seeAlso": [
+      "weapon-properties",
+      "two-weapon-fighting"
+    ]
+  },
+  {
+    "id": "dart",
+    "title": "Dart",
+    "category": "equipment",
+    "body": "Simple ranged. 1d4 piercing. Finesse, Thrown (range 20/60).",
+    "seeAlso": [
+      "weapon-properties",
+      "ranged-attacks-in-melee"
+    ]
+  },
+  {
+    "id": "flail",
+    "title": "Flail",
+    "category": "equipment",
+    "body": "Martial melee. 1d8 bludgeoning.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "glaive",
+    "title": "Glaive",
+    "category": "equipment",
+    "body": "Martial melee. 1d10 slashing. Heavy, Reach, Two-Handed.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "greataxe",
+    "title": "Greataxe",
+    "category": "equipment",
+    "body": "Martial melee. 1d12 slashing. Heavy, Two-Handed.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "greatclub",
+    "title": "Greatclub",
+    "category": "equipment",
+    "body": "Simple melee. 1d8 bludgeoning. Two-Handed.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "greatsword",
+    "title": "Greatsword",
+    "category": "equipment",
+    "body": "Martial melee. 2d6 slashing. Heavy, Two-Handed.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "halberd",
+    "title": "Halberd",
+    "category": "equipment",
+    "body": "Martial melee. 1d10 slashing. Heavy, Reach, Two-Handed.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "hand-crossbow",
+    "title": "Hand Crossbow",
+    "category": "equipment",
+    "body": "Martial ranged. 1d6 piercing. Ammunition (range 30/120), Light, Loading.",
+    "seeAlso": [
+      "weapon-properties",
+      "ranged-attacks-in-melee",
+      "two-weapon-fighting"
+    ]
+  },
+  {
+    "id": "handaxe",
+    "title": "Handaxe",
+    "category": "equipment",
+    "body": "Simple melee. 1d6 slashing. Light, Thrown (range 20/60).",
+    "seeAlso": [
+      "weapon-properties",
+      "two-weapon-fighting"
+    ]
+  },
+  {
+    "id": "heavy-crossbow",
+    "title": "Heavy Crossbow",
+    "category": "equipment",
+    "body": "Martial ranged. 1d10 piercing. Ammunition (range 100/400), Heavy, Loading, Two-Handed.",
+    "seeAlso": [
+      "weapon-properties",
+      "ranged-attacks-in-melee"
+    ]
+  },
+  {
+    "id": "javelin",
+    "title": "Javelin",
+    "category": "equipment",
+    "body": "Simple melee. 1d6 piercing. Thrown (range 30/120).",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "lance",
+    "title": "Lance",
+    "category": "equipment",
+    "body": "Martial melee. 1d12 piercing. Reach, Special (disadvantage against targets within 5 ft; requires two hands unless you're mounted).",
+    "seeAlso": [
+      "weapon-properties",
+      "mounted-combat"
+    ]
+  },
+  {
+    "id": "light-crossbow",
+    "title": "Light Crossbow",
+    "category": "equipment",
+    "body": "Simple ranged. 1d8 piercing. Ammunition (range 80/320), Loading, Two-Handed.",
+    "seeAlso": [
+      "weapon-properties",
+      "ranged-attacks-in-melee"
+    ]
+  },
+  {
+    "id": "light-hammer",
+    "title": "Light Hammer",
+    "category": "equipment",
+    "body": "Simple melee. 1d4 bludgeoning. Light, Thrown (range 20/60).",
+    "seeAlso": [
+      "weapon-properties",
+      "two-weapon-fighting"
+    ]
+  },
+  {
+    "id": "longbow",
+    "title": "Longbow",
+    "category": "equipment",
+    "body": "Martial ranged. 1d8 piercing. Ammunition (range 150/600), Heavy, Two-Handed.",
+    "seeAlso": [
+      "weapon-properties",
+      "ranged-attacks-in-melee"
+    ]
+  },
+  {
+    "id": "longsword",
+    "title": "Longsword",
+    "category": "equipment",
+    "body": "Martial melee. 1d8 slashing. Versatile (1d10).",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "mace",
+    "title": "Mace",
+    "category": "equipment",
+    "body": "Simple melee. 1d6 bludgeoning.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "maul",
+    "title": "Maul",
+    "category": "equipment",
+    "body": "Martial melee. 2d6 bludgeoning. Heavy, Two-Handed.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "morningstar",
+    "title": "Morningstar",
+    "category": "equipment",
+    "body": "Martial melee. 1d8 piercing.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "net",
+    "title": "Net",
+    "category": "equipment",
+    "body": "Martial ranged. No damage. Special (a Large or smaller creature hit is restrained until freed; DC 10 Str check or 5 slashing damage to break it), Thrown (range 5/15).",
+    "seeAlso": [
+      "weapon-properties",
+      "restrained"
+    ]
+  },
+  {
+    "id": "pike",
+    "title": "Pike",
+    "category": "equipment",
+    "body": "Martial melee. 1d10 piercing. Heavy, Reach, Two-Handed.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "quarterstaff",
+    "title": "Quarterstaff",
+    "category": "equipment",
+    "body": "Simple melee. 1d6 bludgeoning. Versatile (1d8).",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "rapier",
+    "title": "Rapier",
+    "category": "equipment",
+    "body": "Martial melee. 1d8 piercing. Finesse.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "scimitar",
+    "title": "Scimitar",
+    "category": "equipment",
+    "body": "Martial melee. 1d6 slashing. Finesse, Light.",
+    "seeAlso": [
+      "weapon-properties",
+      "two-weapon-fighting"
+    ]
+  },
+  {
+    "id": "shortbow",
+    "title": "Shortbow",
+    "category": "equipment",
+    "body": "Simple ranged. 1d6 piercing. Ammunition (range 80/320), Two-Handed.",
+    "seeAlso": [
+      "weapon-properties",
+      "ranged-attacks-in-melee"
+    ]
+  },
+  {
+    "id": "shortsword",
+    "title": "Shortsword",
+    "category": "equipment",
+    "body": "Martial melee. 1d6 piercing. Finesse, Light.",
+    "seeAlso": [
+      "weapon-properties",
+      "two-weapon-fighting"
+    ]
+  },
+  {
+    "id": "sickle",
+    "title": "Sickle",
+    "category": "equipment",
+    "body": "Simple melee. 1d4 slashing. Light.",
+    "seeAlso": [
+      "weapon-properties",
+      "two-weapon-fighting"
+    ]
+  },
+  {
+    "id": "sling",
+    "title": "Sling",
+    "category": "equipment",
+    "body": "Simple ranged. 1d4 bludgeoning. Ammunition (range 30/120).",
+    "seeAlso": [
+      "weapon-properties",
+      "ranged-attacks-in-melee"
+    ]
+  },
+  {
+    "id": "spear",
+    "title": "Spear",
+    "category": "equipment",
+    "body": "Simple melee. 1d6 piercing. Thrown (range 20/60), Versatile (1d8).",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "trident",
+    "title": "Trident",
+    "category": "equipment",
+    "body": "Martial melee. 1d6 piercing. Thrown (range 20/60), Versatile (1d8).",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "unarmed-strike",
+    "title": "Unarmed Strike",
+    "category": "equipment",
+    "body": "1 bludgeoning damage plus Str modifier (or a class feature's alternative, e.g. a Monk's martial arts die).",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "war-pick",
+    "title": "War Pick",
+    "category": "equipment",
+    "body": "Martial melee. 1d8 piercing.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "warhammer",
+    "title": "Warhammer",
+    "category": "equipment",
+    "body": "Martial melee. 1d8 bludgeoning. Versatile (1d10).",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
+    "id": "weapon-properties",
+    "title": "Weapon Properties",
+    "category": "equipment",
+    "body": "Ammunition: needs drawn/loaded ammo; recovering it after a fight takes about 1 minute per piece. Finesse: use Str or Dex, your choice, for attack and damage. Heavy: Small creatures have disadvantage using it. Light: eligible for two-weapon fighting. Loading: only one shot per action regardless of extra attacks. Range: normal/long range in feet — beyond normal imposes disadvantage, beyond long you can't hit at all. Reach: adds 5 ft to your reach. Special: has its own extra rule, described with the weapon. Thrown: can be thrown as a ranged attack using the same ability modifier as melee. Two-Handed: requires both hands. Versatile: usable one- or two-handed; the second die is for two-handed use.",
+    "seeAlso": [
+      "two-weapon-fighting",
+      "ranged-attacks-in-melee"
+    ]
+  },
+  {
+    "id": "weapons",
+    "title": "Weapons",
+    "category": "equipment",
+    "body": "Weapons are Simple or Martial, and Melee or Ranged. Your class and background determine which categories you're proficient with — you only add your proficiency bonus to attacks made with weapons you're proficient in.",
+    "seeAlso": [
+      "weapon-properties",
+      "proficiency-bonus"
+    ]
+  },
+  {
+    "id": "whip",
+    "title": "Whip",
+    "category": "equipment",
+    "body": "Martial melee. 1d4 slashing. Finesse, Reach.",
+    "seeAlso": [
+      "weapon-properties"
+    ]
+  },
+  {
     "id": "cast-a-spell-action",
     "title": "Cast a Spell (Action)",
     "category": "spellcasting",

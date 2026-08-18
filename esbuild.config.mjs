@@ -11,6 +11,7 @@ const buildOptions = {
   entryPoints: [
     { in: "src/background.ts", out: "background" },
     { in: "src/content/mount.ts", out: "content" },
+    { in: "src/options/options.ts", out: "options" },
   ],
   bundle: true,
   outdir,
@@ -25,6 +26,7 @@ const buildOptions = {
 function copyStatic() {
   cpSync("manifest.json", `${outdir}/manifest.json`);
   cpSync("icons", `${outdir}/icons`, { recursive: true });
+  cpSync("src/options/options.html", `${outdir}/options.html`);
 }
 
 if (watch) {

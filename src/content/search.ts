@@ -26,6 +26,17 @@ function normalize(s: string): string {
 }
 
 /**
+ * Strips everything but letters/digits. Used for alias/title comparisons so
+ * "short sword", "short-sword", and "Shortsword" are all the same query —
+ * a literal space in the query can otherwise never subsequence-match a
+ * target that has no space at all, which silently loses real weapon/rule
+ * names that happen to be one word ("Shortsword") when typed as two.
+ */
+function compactKey(s: string): string {
+  return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/**
  * Subsequence fuzzy match: every character of `query` must appear in
  * `target` in order (not necessarily contiguous). Returns a 0..1 score
  * (1 = best) or null if query isn't a subsequence at all. Rewards
@@ -87,8 +98,9 @@ export function search(
   now: number = Date.now(),
   limit = 8
 ): SearchMatch[] {
-  const query = normalize(rawQuery);
-  if (!query) return [];
+  const spacedQuery = normalize(rawQuery);
+  if (!spacedQuery) return [];
+  const query = compactKey(rawQuery);
 
   const rulesById = new Map(rules.map((r) => [r.id, r]));
   const best = new Map<string, SearchMatch>();
@@ -103,14 +115,15 @@ export function search(
 
   // Tier 1/2: alias hits (exact, then prefix).
   for (const [aliasText, ruleId] of aliasIndex) {
-    if (aliasText === query) {
+    const aliasKey = compactKey(aliasText);
+    if (aliasKey === query) {
       consider(rulesById.get(ruleId), SCORE_EXACT_ALIAS, "alias");
-    } else if (aliasText.startsWith(query) && query.length >= 2) {
+    } else if (aliasKey.startsWith(query) && query.length >= 2) {
       // Shorter aliases matched by a short prefix are a stronger signal.
-      const specificity = query.length / aliasText.length;
+      const specificity = query.length / aliasKey.length;
       consider(rulesById.get(ruleId), SCORE_PREFIX_ALIAS * (0.7 + 0.3 * specificity), "alias");
     } else if (query.length >= 3) {
-      const fs = fuzzyScore(query, aliasText);
+      const fs = fuzzyScore(query, aliasKey);
       if (fs !== null) {
         consider(rulesById.get(ruleId), fs * SCORE_FUZZY_ALIAS_MAX, "fuzzy");
       }
@@ -119,20 +132,20 @@ export function search(
 
   // Tiers 3-6: title / body, direct against the rule set.
   for (const rule of rules) {
-    const title = normalize(rule.title);
-    if (title === query) {
+    const titleKey = compactKey(rule.title);
+    if (titleKey === query) {
       consider(rule, SCORE_EXACT_TITLE, "title");
       continue;
     }
-    if (title.startsWith(query)) {
+    if (titleKey.startsWith(query)) {
       consider(rule, SCORE_PREFIX_TITLE, "title");
       continue;
     }
-    const titleFuzzy = fuzzyScore(query, title);
+    const titleFuzzy = fuzzyScore(query, titleKey);
     if (titleFuzzy !== null) {
       consider(rule, titleFuzzy * SCORE_FUZZY_TITLE_MAX, "fuzzy");
     }
-    if (query.length >= 3 && normalize(rule.body).includes(query)) {
+    if (spacedQuery.length >= 3 && normalize(rule.body).includes(spacedQuery)) {
       consider(rule, SCORE_BODY_MATCH, "body");
     }
   }
