@@ -12,6 +12,7 @@ const buildOptions = {
     { in: "src/background.ts", out: "background" },
     { in: "src/content/mount.ts", out: "content" },
     { in: "src/options/options.ts", out: "options" },
+    { in: "src/sidepanel/sidepanel.ts", out: "sidepanel" },
   ],
   bundle: true,
   outdir,
@@ -27,6 +28,7 @@ function copyStatic() {
   cpSync("manifest.json", `${outdir}/manifest.json`);
   cpSync("icons", `${outdir}/icons`, { recursive: true });
   cpSync("src/options/options.html", `${outdir}/options.html`);
+  cpSync("src/sidepanel/sidepanel.html", `${outdir}/sidepanel.html`);
 }
 
 if (watch) {

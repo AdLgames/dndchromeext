@@ -32,6 +32,11 @@ unpacked** → select the `dist/` folder.
 Rebind the hotkey any time at `chrome://extensions/shortcuts` if it collides
 with something else bound to Ctrl+Shift+Space (e.g. a VTT's own shortcuts).
 
+Prefer something pinned open instead of a toggle? Click the extension's
+toolbar icon to open it as a **side panel** — same search, same data, just
+docked in the browser's sidebar instead of overlaid on the page. The hotkey
+overlay and the side panel are independent; use whichever fits how you play.
+
 ## Development
 
 ```sh
@@ -53,6 +58,12 @@ src/
     overlay.ts           # search input + results/detail rendering, keyboard nav
     search.ts            # alias resolution, ranking tiers, recency boost
     styles.css            # scoped inside the shadow root
+  sidepanel/
+    sidepanel.html        # persistent side-panel UI (chrome.sidePanel)
+    sidepanel.ts            # same search.ts data layer, own full-page rendering
+  options/
+    options.html            # hotkey status + local no-match log
+    options.ts
   data/
     rules.json            # generated — do not hand-edit, see data-src/
     aliases.json            # hand-authored table-slang → rule id map (the moat)
