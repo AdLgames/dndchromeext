@@ -367,5 +367,10 @@
   "great sword": "greatsword",
   "war hammer": "warhammer",
   "shiv": "dagger",
-  "quiver": "shortbow"
+  "quiver": "shortbow",
+
+  "mm": "magic-missile",
+  "heal spell": "cure-wounds",
+  "healing spell": "cure-wounds",
+  "fireball spell": "fireball"
 }

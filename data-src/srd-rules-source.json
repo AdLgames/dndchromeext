@@ -319,5 +319,9 @@
   { "id": "longbow", "title": "Longbow", "category": "equipment",
     "text": "Martial ranged. 1d8 piercing. Ammunition (range 150/600), Heavy, Two-Handed.", "related": ["weapon-properties", "ranged-attacks-in-melee"] },
   { "id": "net", "title": "Net", "category": "equipment",
-    "text": "Martial ranged. No damage. Special (a Large or smaller creature hit is restrained until freed; DC 10 Str check or 5 slashing damage to break it), Thrown (range 5/15).", "related": ["weapon-properties", "restrained"] }
+    "text": "Martial ranged. No damage. Special (a Large or smaller creature hit is restrained until freed; DC 10 Str check or 5 slashing damage to break it), Thrown (range 5/15).", "related": ["weapon-properties", "restrained"] },
+
+  { "id": "attunement", "title": "Attunement", "category": "equipment",
+    "text": "Some magic items require you to attune to them before their magic works. Attuning takes a short rest spent focused on that item alone. You can be attuned to at most 3 items at once, and some items also require a specific class, race, or alignment.",
+    "related": ["short-rest"] }
 ]
