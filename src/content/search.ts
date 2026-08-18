@@ -174,3 +174,39 @@ export async function recordView(ruleId: string): Promise<void> {
 
   await chrome.storage.local.set({ [RECENCY_STORAGE_KEY]: capped });
 }
+
+const MISSES_STORAGE_KEY = "rulesOverlay:misses";
+const MISSES_MAX_ENTRIES = 100;
+
+export type SearchMiss = { query: string; count: number; lastSeen: number };
+
+/**
+ * Local-only "what did people search for and find nothing" log, so the
+ * alias table (the actual product) can keep growing from real usage
+ * without ever sending a query anywhere. Never touches the network.
+ */
+export async function getMisses(): Promise<SearchMiss[]> {
+  const stored = await chrome.storage.local.get(MISSES_STORAGE_KEY);
+  return (stored[MISSES_STORAGE_KEY] as SearchMiss[] | undefined) ?? [];
+}
+
+export async function recordMiss(rawQuery: string): Promise<void> {
+  const key = normalize(rawQuery);
+  if (!key) return;
+
+  const misses = await getMisses();
+  const existing = misses.find((m) => m.query === key);
+  if (existing) {
+    existing.count += 1;
+    existing.lastSeen = Date.now();
+  } else {
+    misses.push({ query: key, count: 1, lastSeen: Date.now() });
+  }
+
+  const capped = misses.sort((a, b) => b.lastSeen - a.lastSeen).slice(0, MISSES_MAX_ENTRIES);
+  await chrome.storage.local.set({ [MISSES_STORAGE_KEY]: capped });
+}
+
+export async function clearMisses(): Promise<void> {
+  await chrome.storage.local.remove(MISSES_STORAGE_KEY);
+}

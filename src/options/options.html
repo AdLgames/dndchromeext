@@ -13,6 +13,7 @@
     padding: 0 20px;
   }
   h1 { font-size: 20px; }
+  h2 { font-size: 15px; margin-bottom: 4px; }
   p { line-height: 1.5; color: #d9cfec; }
   #shortcut-status {
     font-size: 15px;
@@ -38,7 +39,33 @@
     cursor: pointer;
   }
   button:hover { background: #d9c9f7; }
+  button.secondary {
+    background: transparent;
+    color: #c9b6ee;
+    border: 1px solid #4a3a68;
+  }
+  button.secondary:hover { background: #241a30; }
   .hint { font-size: 13px; color: #a894c4; }
+  hr { border: none; border-top: 1px solid #2c2238; margin: 32px 0 20px; }
+  #misses-list {
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 0;
+    border: 1px solid #3c2f52;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  #misses-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    font-size: 13.5px;
+    border-bottom: 1px solid #2c2238;
+  }
+  #misses-list li:last-child { border-bottom: none; }
+  #misses-list .count { color: #a894c4; white-space: nowrap; }
+  #misses-empty { font-size: 13.5px; color: #a894c4; margin-top: 12px; }
 </style>
 </head>
 <body>
@@ -50,6 +77,19 @@
     above opens Chrome's own shortcuts page, where you can assign or change
     the binding for "Open/close the rules overlay."
   </p>
+
+  <hr />
+
+  <h2>Searches that found nothing</h2>
+  <p class="hint">
+    Stored only on this device, never sent anywhere. When a search comes up
+    empty and you close the overlay, it's logged here so misses can turn
+    into new aliases later.
+  </p>
+  <ul id="misses-list"></ul>
+  <p id="misses-empty">No unmatched searches yet.</p>
+  <button id="clear-misses" type="button" class="secondary">Clear list</button>
+
   <script src="options.js"></script>
 </body>
 </html>

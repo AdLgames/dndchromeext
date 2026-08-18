@@ -1,5 +1,5 @@
 import type { Rule } from "../types";
-import { buildAliasIndex, getRecency, recordView, search, type SearchMatch } from "./search";
+import { buildAliasIndex, getRecency, recordMiss, recordView, search, type SearchMatch } from "./search";
 import rulesData from "../data/rules.json";
 import aliasesData from "../data/aliases.json";
 
@@ -14,6 +14,7 @@ const SRD_ATTRIBUTION =
 export type OverlayHandle = {
   focusInput: () => void;
   reset: () => void;
+  flushMiss: () => void;
 };
 
 type View = "search" | "detail";
@@ -233,6 +234,15 @@ export function createOverlay(shadow: ShadowRoot, opts: { onClose: () => void })
       results = [];
       selectedIndex = 0;
       renderResultsList();
+    },
+    // Called right before the overlay hides. If the user typed something
+    // real and gave up with zero results still showing, log it locally —
+    // that's the signal for growing the alias table later.
+    flushMiss: () => {
+      const query = input.value.trim();
+      if (view === "search" && query.length >= 3 && results.length === 0) {
+        void recordMiss(query);
+      }
     },
   };
 }

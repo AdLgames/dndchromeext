@@ -48,6 +48,7 @@ function show() {
 
 function hide() {
   if (!host) return;
+  overlay?.flushMiss();
   host.style.display = "none";
 }
 
