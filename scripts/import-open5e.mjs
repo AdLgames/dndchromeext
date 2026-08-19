@@ -35,6 +35,11 @@ function clean(text) {
   return (text ?? "").replace(/_([^_]+)_/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1").trim();
 }
 
+function title(text) {
+  const value = String(text ?? "");
+  return value ? value[0].toUpperCase() + value.slice(1).toLowerCase() : "";
+}
+
 function crLabel(cr) {
   const value = Number(cr);
   if (value === 0.125) return "1/8";
@@ -220,7 +225,11 @@ function blackFlagMonsters() {
       group: "bestiary",
       source: "blackflag",
       category: String(m.type ?? "creature").toLowerCase(),
-      subtitle: [`${m.size} ${m.type}`, m.alignment].filter(Boolean).join(" · "),
+      // Upstream stores these as "medium Beast"; match the SRD's casing.
+      subtitle: [
+        `${title(m.size)} ${String(m.type ?? "").toLowerCase()}`.trim(),
+        m.alignment,
+      ].filter(Boolean).join(" · "),
       badge: `CR ${crLabel(m.cr ?? m.challenge_rating ?? 0)}`,
       text: searchText,
       related: [],

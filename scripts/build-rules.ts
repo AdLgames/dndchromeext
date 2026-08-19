@@ -131,6 +131,57 @@ const rules: Rule[] = source
   })
   .sort((a, b) => a.group.localeCompare(b.group) || a.title.localeCompare(b.title));
 
+/**
+ * Packs in preference order. Black Flag and A5E are 5e-compatible reference
+ * documents, so they restate most of the SRD's creatures and spells; without
+ * this the bestiary listed "Eagle" twice.
+ */
+const PACK_PRIORITY = ["srd", "a5e", "blackflag"];
+
+function packRank(source: string | undefined): number {
+  const index = PACK_PRIORITY.indexOf(source ?? "srd");
+  return index === -1 ? PACK_PRIORITY.length : index;
+}
+
+/**
+ * Key for spotting the same thing under a different name. Black Flag inverts
+ * its creature names ("Ape, Giant"), so the words are sorted before joining —
+ * otherwise it reads as a different monster from the SRD's "Giant Ape".
+ */
+const titleKey = (rule: Rule) => {
+  const words = rule.title
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .sort();
+  return `${rule.group}::${words.join("-")}`;
+};
+
+/**
+ * Drops an entry when a higher-priority pack already provides the same title
+ * in the same group. Deliberately only ACROSS packs: within the SRD, several
+ * entries legitimately share a name — Ability Score Improvement exists once
+ * per class per level, and Extra Attack belongs to four different classes —
+ * and those are told apart by their subtitles, not their titles.
+ */
+function dedupeAcrossPacks(all: Rule[]): { kept: Rule[]; dropped: Rule[] } {
+  const bestRankByTitle = new Map<string, number>();
+  for (const rule of all) {
+    const key = titleKey(rule);
+    const rank = packRank(rule.source);
+    const seen = bestRankByTitle.get(key);
+    if (seen === undefined || rank < seen) bestRankByTitle.set(key, rank);
+  }
+
+  const kept: Rule[] = [];
+  const dropped: Rule[] = [];
+  for (const rule of all) {
+    if (packRank(rule.source) > (bestRankByTitle.get(titleKey(rule)) ?? 0)) dropped.push(rule);
+    else kept.push(rule);
+  }
+  return { kept, dropped };
+}
+
 // Every non-SRD source must carry the notice its licence demands, or the
 // entries citing it cannot ship.
 const sources = JSON.parse(readFileSync(SOURCES_PATH, "utf8")) as SourceRecord[];
@@ -145,14 +196,24 @@ for (const rule of rules) {
   }
 }
 
-writeFileSync(OUTPUT_PATH, JSON.stringify(rules) + "\n");
+const { kept: deduped, dropped } = dedupeAcrossPacks(rules);
+
+writeFileSync(OUTPUT_PATH, JSON.stringify(deduped) + "\n");
 writeFileSync(FLOWS_OUTPUT_PATH, JSON.stringify(flows) + "\n");
 writeFileSync(SOURCES_OUTPUT_PATH, JSON.stringify(sources) + "\n");
 
-const counts = rules.reduce<Record<string, number>>((acc, r) => {
+const counts = deduped.reduce<Record<string, number>>((acc, r) => {
   acc[r.group] = (acc[r.group] ?? 0) + 1;
   return acc;
 }, {});
-const explained = rules.filter((r) => r.tldr).length;
-console.log(`build-rules: wrote ${rules.length} entries to ${OUTPUT_PATH}`, counts);
+const explained = deduped.filter((r) => r.tldr).length;
+const droppedByPack = dropped.reduce<Record<string, number>>((acc, r) => {
+  const key = r.source ?? "srd";
+  acc[key] = (acc[key] ?? 0) + 1;
+  return acc;
+}, {});
+console.log(`build-rules: wrote ${deduped.length} entries to ${OUTPUT_PATH}`, counts);
+if (dropped.length) {
+  console.log(`build-rules: dropped ${dropped.length} cross-pack duplicates`, droppedByPack);
+}
 console.log(`build-rules: ${explained} entries carry a plain-English summary, ${flows.length} flows`);
