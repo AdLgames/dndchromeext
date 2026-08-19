@@ -157,9 +157,13 @@ export function search(
   rules: Rule[],
   aliasIndex: Map<string, string>,
   recency: Record<string, number>,
-  options: { now?: number; limit?: number; sources?: Record<RuleGroup, boolean> } = {}
+  options: {
+    now?: number; limit?: number;
+    sources?: Record<RuleGroup, boolean>;
+    packs?: Record<string, boolean>;
+  } = {}
 ): SearchMatch[] {
-  const { now = Date.now(), limit = 40, sources } = options;
+  const { now = Date.now(), limit = 40, sources, packs } = options;
 
   const { filter, text: strippedQuery } = parseStatQuery(rawQuery);
   const filtering = isFilterActive(filter);
@@ -169,6 +173,7 @@ export function search(
   const query = compactKey(strippedQuery);
 
   let enabled = sources ? rules.filter((r) => sources[r.group] !== false) : rules;
+  if (packs) enabled = enabled.filter((r) => packs[r.source ?? "srd"] !== false);
   if (filtering) enabled = enabled.filter((r) => matchesFilter(r, filter));
 
   // A pure stat query ("ac>18 cr<5") has no text to rank, so list the

@@ -45,7 +45,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["data/rules.json", "data/aliases.json", "data/flows.json"],
+      "resources": ["data/rules.json", "data/aliases.json", "data/flows.json", "data/sources.json"],
       "matches": ["<all_urls>"]
     }
   ]

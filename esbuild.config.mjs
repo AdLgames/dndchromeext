@@ -40,6 +40,7 @@ function copyStatic() {
   cpSync("src/data/rules.json", `${outdir}/data/rules.json`);
   cpSync("src/data/aliases.json", `${outdir}/data/aliases.json`);
   cpSync("src/data/flows.json", `${outdir}/data/flows.json`);
+  cpSync("src/data/sources.json", `${outdir}/data/sources.json`);
 }
 
 if (watch) {

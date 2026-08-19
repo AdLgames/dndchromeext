@@ -1407,3 +1407,73 @@
   color: var(--color-neutral-700);
   flex-basis: 100%;
 }
+
+/* ------------------------------------------------------ attack panel -- */
+.attack-panel {
+  border-top: 1px solid var(--color-divider);
+  margin-top: 4px;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.attack-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px;
+  border: 1px solid var(--color-divider);
+  background: var(--color-surface);
+}
+
+.attack-name {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+
+.target-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.temp-hp {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent-800);
+  background: var(--color-accent-100);
+  border: 1px solid var(--color-accent-300);
+  padding: 1px 5px;
+}
+
+.log-line {
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: 12.5px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.log-line.attack { border-left: 2px solid var(--color-accent-400); }
+.log-line.damage { border-left: 2px solid var(--color-accent-600); }
+.log-line.heal { border-left: 2px solid var(--color-accent-300); }
+.log-line.save { border-left: 2px solid var(--color-neutral-400); }
+.log-line.note { border-left: 2px solid var(--color-accent-900); }
+
+.src-tag {
+  margin-left: 7px;
+  font-family: var(--font-heading);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+  border: 1px solid var(--color-accent-300);
+  padding: 0 4px;
+  white-space: nowrap;
+}

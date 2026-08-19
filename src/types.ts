@@ -87,10 +87,24 @@ export type QuickAction =
   | { kind: "flow"; label: string; flowId: string }
   | { kind: "note"; label: string; text: string };
 
+/** Where a bundled entry came from, and the notice its licence requires. */
+export type SourceRecord = {
+  id: string;
+  name: string;
+  organization?: string;
+  license: string;
+  url?: string;
+  attribution: string;
+};
+
+/** Entries with no `source` are SRD 5.1, the project's original corpus. */
+export const SRD_SOURCE_ID = "srd";
+
 export type Rule = {
   id: string; // slug, stable — aliases reference this
   title: string;
   group: RuleGroup;
+  source?: string;
   category: string; // fine-grained label: "combat", "evocation", "dragon"…
   body: string;
   subtitle?: string; // "Medium dragon · chaotic evil"
@@ -151,6 +165,13 @@ export type Character = {
 };
 
 // ------------------------------------------------------------ combat ----
+export type Attack = {
+  name: string;
+  bonus: number;
+  damage: string; // dice expression, e.g. "1d6 + 2"
+  note?: string; // "Recharge 5-6", "DC 11 Dex half"
+};
+
 export type Combatant = {
   id: string;
   name: string;
@@ -169,12 +190,24 @@ export type Combatant = {
   isPlayer: boolean;
   ruleId?: string; // linked bestiary entry
   characterId?: string; // linked party member
+  attacks: Attack[];
+  abilities: AbilityScores;
+  saveBonuses: Partial<Record<keyof AbilityScores, number>>;
+};
+
+/** One resolved thing that happened, kept so the table can see the maths. */
+export type CombatEvent = {
+  at: number;
+  text: string;
+  detail?: string;
+  kind: "attack" | "damage" | "heal" | "save" | "note";
 };
 
 export type Encounter = {
   round: number;
   turn: number;
   combatants: Combatant[];
+  log: CombatEvent[];
 };
 
 export type AliasTable = Record<string, string>; // alias text -> rule id

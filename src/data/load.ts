@@ -1,6 +1,6 @@
-import type { AliasTable, Flow, Rule } from "../types";
+import type { AliasTable, Flow, Rule, SourceRecord } from "../types";
 
-export type Dataset = { rules: Rule[]; aliases: AliasTable; flows: Flow[] };
+export type Dataset = { rules: Rule[]; aliases: AliasTable; flows: Flow[]; sources: SourceRecord[] };
 
 let pending: Promise<Dataset> | null = null;
 
@@ -19,7 +19,8 @@ export function loadDataset(): Promise<Dataset> {
       read<Rule[]>("rules.json"),
       read<AliasTable>("aliases.json"),
       read<Flow[]>("flows.json"),
-    ]).then(([rules, aliases, flows]) => ({ rules, aliases, flows }));
+      read<SourceRecord[]>("sources.json"),
+    ]).then(([rules, aliases, flows, sources]) => ({ rules, aliases, flows, sources }));
   }
   return pending;
 }

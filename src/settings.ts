@@ -4,6 +4,8 @@ export type Appearance = "match" | "light" | "dark";
 
 export type Settings = {
   sources: Record<RuleGroup, boolean>;
+  /** Per-content-pack toggles, keyed by SourceRecord id ("srd" for SRD 5.1). */
+  packs: Record<string, boolean>;
   appearance: Appearance;
   keepPinned: boolean;
   selectionLookup: boolean;
@@ -13,6 +15,7 @@ const SETTINGS_KEY = "rulesOverlay:settings";
 
 export const DEFAULT_SETTINGS: Settings = {
   sources: Object.fromEntries(RULE_GROUPS.map((g) => [g, true])) as Record<RuleGroup, boolean>,
+  packs: {},
   appearance: "match",
   keepPinned: true,
   selectionLookup: true,
@@ -25,6 +28,7 @@ export async function getSettings(): Promise<Settings> {
     ...DEFAULT_SETTINGS,
     ...saved,
     sources: { ...DEFAULT_SETTINGS.sources, ...saved?.sources },
+    packs: { ...saved?.packs },
   };
 }
 
@@ -41,6 +45,7 @@ export function onSettingsChanged(fn: (settings: Settings) => void): void {
         ...DEFAULT_SETTINGS,
         ...changes[SETTINGS_KEY].newValue,
         sources: { ...DEFAULT_SETTINGS.sources, ...changes[SETTINGS_KEY].newValue?.sources },
+        packs: { ...changes[SETTINGS_KEY].newValue?.packs },
       });
     }
   });

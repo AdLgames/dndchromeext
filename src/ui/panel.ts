@@ -1,10 +1,11 @@
 import {
-  advance, combatantBlank, combatantFromCharacter, combatantFromMonster, EMPTY_ENCOUNTER,
-  getEncounter, onEncounterChanged, ordered, saveEncounter, TRACKED_CONDITIONS,
+  abilityMod, advance, applyDamage, applyHealing, combatantBlank,
+  combatantFromCharacter, combatantFromMonster, EMPTY_ENCOUNTER, getEncounter, logEvent,
+  onEncounterChanged, ordered, resolveAttack, rollSave, saveEncounter, TRACKED_CONDITIONS,
 } from "../combat";
 import { loadDataset } from "../data/load";
 import { clearRollLog, formatRoll, getRollLog, pushRoll, roll, rollRepeated, type RollDetail } from "../dice";
-import { getParty } from "../party";
+import { getParty, onPartyChanged } from "../party";
 import { scaleStatBlock } from "../scale";
 import { clearPins, getPins, onPinsChanged, togglePin } from "../pins";
 import {
@@ -18,12 +19,12 @@ import {
 } from "../settings";
 import {
   GROUP_LABELS, RULE_GROUPS,
-  type AbilityScores, type Character, type Combatant, type Encounter, type Flow,
-  type NamedEntry, type QuickAction, type Rule, type RuleGroup,
+  type AbilityScores, type Attack, type Character, type Combatant, type Encounter, type Flow,
+  type NamedEntry, type QuickAction, type Rule, type RuleGroup, type SourceRecord,
 } from "../types";
 import { el, highlighted, icon, prose } from "./dom";
 
-const ATTRIBUTION =
+const SRD_ATTRIBUTION =
   "Includes material from the D&D System Reference Document 5.1, © Wizards of the Coast LLC, CC BY 4.0.";
 
 const GROUP_ICONS: Record<RuleGroup, "bestiary" | "spells" | "rules" | "items" | "classes"> = {
@@ -65,6 +66,8 @@ export class Panel {
   private rulesById = new Map<string, Rule>();
   private flows: Flow[] = [];
   private flowsById = new Map<string, Flow>();
+  private sources: SourceRecord[] = [];
+  private sourcesById = new Map<string, SourceRecord>();
   private aliasIndex = new Map<string, string>();
   private recency: Record<string, number> = {};
   private settings: Settings = DEFAULT_SETTINGS;
@@ -94,6 +97,9 @@ export class Panel {
   private encounter: Encounter = EMPTY_ENCOUNTER;
   private party: Character[] = [];
   private combatPicker = false;
+  private attackFrom: string | null = null;
+  private attackMode: "normal" | "adv" | "dis" = "normal";
+  private hpDelta = new Map<string, number>();
   private input: HTMLInputElement | null = null;
   private focusMode: "none" | "caret" | "select" = "none";
   private caret = 0;
@@ -107,13 +113,15 @@ export class Panel {
   }
 
   private async init() {
-    const [{ rules, aliases, flows }, recency, settings, pins, encounter, party, log] = await Promise.all([
+    const [{ rules, aliases, flows, sources }, recency, settings, pins, encounter, party, log] = await Promise.all([
       loadDataset(), getRecency(), getSettings(), getPins(), getEncounter(), getParty(), getRollLog(),
     ]);
     this.rules = rules;
     this.rulesById = new Map(rules.map((r) => [r.id, r]));
     this.flows = flows;
     this.flowsById = new Map(flows.map((f) => [f.id, f]));
+    this.sources = sources;
+    this.sourcesById = new Map(sources.map((s) => [s.id, s]));
     this.aliasIndex = buildAliasIndex(aliases);
     this.recency = recency;
     this.settings = settings;
@@ -126,6 +134,10 @@ export class Panel {
     onSettingsChanged((next) => { this.settings = next; this.applyTheme(); this.render(); });
     onPinsChanged((next) => { this.pins = next; this.render(); });
     onEncounterChanged((next) => { this.encounter = next; this.render(); });
+    // The party page is a separate tab, so characters are usually created
+    // *after* this panel booted — without this it kept the empty list it
+    // loaded with and "Add from your party" stayed empty forever.
+    onPartyChanged((next) => { this.party = next; this.render(); });
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.applyTheme());
 
     this.applyTheme();
@@ -189,7 +201,9 @@ export class Panel {
 
   private runSearch() {
     this.matches = this.query.trim()
-      ? search(this.query, this.rules, this.aliasIndex, this.recency, { sources: this.settings.sources })
+      ? search(this.query, this.rules, this.aliasIndex, this.recency, {
+          sources: this.settings.sources, packs: this.settings.packs,
+        })
       : [];
     this.selected = 0;
     this.groupFilter = "all";
@@ -374,7 +388,7 @@ export class Panel {
 
     if (this.view === "detail" && this.detail) {
       panel.append(this.renderDetailHeader(), this.renderDetailBody(this.detail));
-      panel.append(this.rollStrip() ?? this.footer());
+      panel.append(this.rollStrip() ?? this.footer(this.detail));
     } else if (this.view === "settings") {
       panel.append(this.renderSubHeader("Settings"), this.renderSettings(), this.renderSettingsFoot());
     } else if (this.view === "pinned") {
@@ -620,7 +634,12 @@ export class Panel {
         }, [
           el("div", { class: "row-main" }, [
             el("span", { class: "row-title" }, highlighted(match.rule.title, range)),
-            match.rule.subtitle ? el("span", { class: "row-sub", text: match.rule.subtitle }) : null,
+            el("span", { class: "row-sub" }, [
+              match.rule.subtitle ?? "",
+              match.rule.source
+                ? el("span", { class: "src-tag", text: this.sourcesById.get(match.rule.source)?.name ?? match.rule.source })
+                : null,
+            ]),
           ]),
           match.rule.badge ? el("span", { class: "row-badge", text: match.rule.badge }) : null,
         ]));
@@ -645,8 +664,14 @@ export class Panel {
     ]);
   }
 
-  private footer(): HTMLElement {
-    return el("div", { class: "footer", text: ATTRIBUTION });
+  /**
+   * Each licence we ship under requires its own notice, so the footer shows
+   * the one belonging to whatever is on screen rather than a single blanket
+   * line that would be wrong for two thirds of the corpus.
+   */
+  private footer(rule?: Rule | null): HTMLElement {
+    const source = rule?.source ? this.sourcesById.get(rule.source) : undefined;
+    return el("div", { class: "footer", text: source?.attribution ?? SRD_ATTRIBUTION });
   }
 
   // ------------------------------------------------------------ detail --
@@ -686,8 +711,12 @@ export class Panel {
   private renderDetailBody(rule: Rule): HTMLElement {
     const body = el("div", { class: "body" });
 
+    const source = rule.source ? this.sourcesById.get(rule.source) : undefined;
     const head = el("div", { class: "detail-head" }, [
-      el("span", { class: "kicker", text: `${GROUP_LABELS[rule.group]} · SRD 5.1` }),
+      el("span", {
+        class: "kicker",
+        text: `${GROUP_LABELS[rule.group]} · ${source?.name ?? "SRD 5.1"}`,
+      }),
       el("h1", { class: "detail-title", text: rule.title }),
       rule.subtitle ? el("span", { class: "detail-sub", text: rule.subtitle }) : null,
     ]);
@@ -985,7 +1014,9 @@ export class Panel {
 
   private catalogEntries(): Rule[] {
     const pool = this.rules.filter(
-      (r) => r.group === this.catalogGroup && matchesFilter(r, this.catalogFilter)
+      (r) => r.group === this.catalogGroup
+        && this.settings.packs[r.source ?? "srd"] !== false
+        && matchesFilter(r, this.catalogFilter)
     );
 
     const sorters: Record<SortKey, (a: Rule, b: Rule) => number> = {
@@ -1283,6 +1314,19 @@ export class Panel {
     for (const c of list) {
       body.append(this.renderCombatant(c, active?.id === c.id));
     }
+
+    if (this.encounter.log.length) {
+      body.append(el("div", { class: "group-head" }, [
+        el("span", { text: "Combat log" }),
+        el("span", { text: String(this.encounter.log.length) }),
+      ]));
+      for (const event of this.encounter.log.slice(0, 12)) {
+        body.append(el("div", { class: `log-line ${event.kind}` }, [
+          el("span", { text: event.text }),
+          event.detail ? el("span", { class: "roll-detail", text: event.detail }) : null,
+        ]));
+      }
+    }
     return body;
   }
 
@@ -1326,6 +1370,163 @@ export class Panel {
     ]);
   }
 
+  private async applyAttack(attacker: Combatant, attack: Attack, target: Combatant) {
+    const result = resolveAttack(attacker, attack, target, this.attackMode);
+    this.lastRoll = result.attackRoll;
+    void pushRoll(result.attackRoll);
+
+    const verdict = result.crit ? "CRIT" : result.fumble ? "natural 1" : result.hit ? "hit" : "miss";
+    let encounter = logEvent(this.encounter, {
+      kind: "attack",
+      text: `${attacker.name} → ${target.name}: ${attack.name} ${result.total} vs AC ${target.ac} — ${verdict}`,
+      detail: result.hit && result.damage
+        ? `${result.damageTotal} damage (${result.damage.expr} ${formatRoll(result.damage)})`
+        : undefined,
+    });
+
+    if (result.hit && result.damageTotal > 0) {
+      encounter = {
+        ...encounter,
+        combatants: encounter.combatants.map((x) =>
+          x.id === target.id ? applyDamage(x, result.damageTotal) : x
+        ),
+      };
+
+      if (result.concentration) {
+        const { dc, save, held } = result.concentration;
+        encounter = logEvent(encounter, {
+          kind: "save",
+          text: `${target.name} concentration DC ${dc}: ${save.total} — ${held ? "holds" : "broken"}`,
+        });
+        if (!held) {
+          encounter = {
+            ...encounter,
+            combatants: encounter.combatants.map((x) =>
+              x.id === target.id ? { ...x, concentrating: false, concentrationNote: "" } : x
+            ),
+          };
+        }
+      }
+
+      const after = encounter.combatants.find((x) => x.id === target.id);
+      if (after && after.hp === 0) {
+        encounter = logEvent(encounter, { kind: "note", text: `${target.name} drops to 0 HP` });
+      }
+    }
+
+    this.attackFrom = null;
+    await this.updateEncounter(encounter);
+  }
+
+  private async adjustHp(c: Combatant, amount: number, heal: boolean) {
+    if (!amount) return;
+    let encounter: Encounter = {
+      ...this.encounter,
+      combatants: this.encounter.combatants.map((x) =>
+        x.id === c.id ? (heal ? applyHealing(x, amount) : applyDamage(x, amount)) : x
+      ),
+    };
+    encounter = logEvent(encounter, {
+      kind: heal ? "heal" : "damage",
+      text: `${c.name} ${heal ? "healed" : "takes"} ${amount}${heal ? "" : " damage"}`,
+    });
+
+    // Damage taken outside an attack still threatens a held spell.
+    if (!heal && c.concentrating) {
+      const dc = Math.max(10, Math.floor(amount / 2));
+      const save = rollSave(c, "con");
+      const held = save.total >= dc;
+      this.lastRoll = save;
+      encounter = logEvent(encounter, {
+        kind: "save",
+        text: `${c.name} concentration DC ${dc}: ${save.total} — ${held ? "holds" : "broken"}`,
+      });
+      if (!held) {
+        encounter = {
+          ...encounter,
+          combatants: encounter.combatants.map((x) =>
+            x.id === c.id ? { ...x, concentrating: false, concentrationNote: "" } : x
+          ),
+        };
+      }
+    }
+
+    this.hpDelta.delete(c.id);
+    await this.updateEncounter(encounter);
+  }
+
+  private renderAttackPanel(attacker: Combatant): HTMLElement {
+    const targets = ordered(this.encounter).filter((t) => t.id !== attacker.id);
+
+    const modeBtn = (mode: "normal" | "adv" | "dis", label: string) =>
+      el("button", {
+        class: `mini-btn${this.attackMode === mode ? " on" : ""}`,
+        text: label,
+        onclick: () => { this.attackMode = mode; this.render(); },
+      });
+
+    const rows: HTMLElement[] = [
+      el("div", { class: "fighter-row" }, [
+        el("span", { class: "stat-k", text: "Roll" }),
+        modeBtn("normal", "Normal"), modeBtn("adv", "Adv"), modeBtn("dis", "Dis"),
+        el("button", {
+          class: "mini-btn", text: "Cancel", style: "margin-left:auto",
+          onclick: () => { this.attackFrom = null; this.render(); },
+        }),
+      ]),
+    ];
+
+    if (!attacker.attacks.length) {
+      rows.push(el("div", { class: "fighter-row" }, [
+        el("span", { class: "roll-detail", text: "No attacks yet — add one below." }),
+      ]));
+    }
+
+    for (const attack of attacker.attacks) {
+      rows.push(el("div", { class: "attack-line" }, [
+        el("span", { class: "attack-name", text: attack.name }),
+        el("span", { class: "roll-detail", text: `${attack.bonus >= 0 ? "+" : ""}${attack.bonus} · ${attack.damage}` }),
+        el("div", { class: "target-list" }, targets.length
+          ? targets.map((t) =>
+              el("button", {
+                class: "mini-btn",
+                title: `Attack ${t.name} (AC ${t.ac})`,
+                text: `▸ ${t.name}`,
+                onclick: () => void this.applyAttack(attacker, attack, t),
+              })
+            )
+          : [el("span", { class: "roll-detail", text: "No other combatants to target." })]),
+      ]));
+    }
+
+    rows.push(el("div", { class: "fighter-row" }, [
+      el("button", {
+        class: "mini-btn", text: "+ Add attack",
+        onclick: () => {
+          const name = prompt("Attack name (e.g. Longsword)");
+          if (!name) return;
+          const bonus = parseInt(prompt("Attack bonus, e.g. 5", "0") ?? "0", 10) || 0;
+          const damage = prompt("Damage dice, e.g. 1d8 + 3", "1d6") ?? "1d6";
+          this.patchCombatant(attacker.id, {
+            attacks: [...attacker.attacks, { name, bonus, damage }],
+          });
+        },
+      }),
+      ...attacker.attacks.map((attack, i) =>
+        el("button", {
+          class: "mini-btn danger",
+          title: `Remove ${attack.name}`,
+          text: `− ${attack.name}`,
+          onclick: () => this.patchCombatant(attacker.id, {
+            attacks: attacker.attacks.filter((_, j) => j !== i),
+          }),
+        })
+      ),
+    ]));
+
+    return el("div", { class: "attack-panel" }, rows);
+  }
+
   private renderCombatant(c: Combatant, isActive: boolean): HTMLElement {
     const down = c.hp <= 0;
 
@@ -1353,10 +1554,51 @@ export class Panel {
       el("span", { class: "stat-k", text: "HP" }),
       number(c.hp, (hp) => this.patchCombatant(c.id, { hp }), "hit points"),
       el("span", { text: `/ ${c.maxHp}` }),
+      c.tempHp ? el("span", { class: "temp-hp", text: `+${c.tempHp} temp` }) : null,
       el("span", { class: "stat-k", text: "AC" }),
       number(c.ac, (ac) => this.patchCombatant(c.id, { ac }), "armor class"),
       el("span", { class: "stat-k", text: "Init" }),
       number(c.initiative, (initiative) => this.patchCombatant(c.id, { initiative }), "initiative"),
+    ]);
+
+    // Damage / heal by an explicit amount, which is how most table maths
+    // actually arrives — someone else rolled it.
+    const deltaInput = el("input", {
+      class: "num-input", type: "number", min: "0",
+      placeholder: "0", "aria-label": `amount for ${c.name}`,
+      value: this.hpDelta.get(c.id) ? String(this.hpDelta.get(c.id)) : "",
+      oninput: (e: Event) => {
+        this.hpDelta.set(c.id, parseInt((e.target as HTMLInputElement).value, 10) || 0);
+      },
+    });
+
+    const hpControls = el("div", { class: "fighter-row" }, [
+      deltaInput,
+      el("button", {
+        class: "mini-btn", text: "Damage",
+        onclick: () => void this.adjustHp(c, this.hpDelta.get(c.id) ?? 0, false),
+      }),
+      el("button", {
+        class: "mini-btn", text: "Heal",
+        onclick: () => void this.adjustHp(c, this.hpDelta.get(c.id) ?? 0, true),
+      }),
+      el("button", {
+        class: "mini-btn", text: "Temp",
+        title: "Set temporary hit points (they don't stack — the higher wins)",
+        onclick: () => {
+          const amount = this.hpDelta.get(c.id) ?? 0;
+          this.patchCombatant(c.id, { tempHp: Math.max(c.tempHp, amount) });
+          this.hpDelta.delete(c.id);
+        },
+      }),
+      el("button", {
+        class: "mini-btn", text: "Attack",
+        style: "margin-left:auto",
+        onclick: () => {
+          this.attackFrom = this.attackFrom === c.id ? null : c.id;
+          this.render();
+        },
+      }),
     ]);
 
     const movementLeft = Math.max(0, c.speed - c.movementUsed);
@@ -1379,6 +1621,27 @@ export class Panel {
       }),
     ]);
 
+    const saves = el("div", { class: "fighter-row" }, [
+      el("span", { class: "stat-k", text: "Save" }),
+      ...ABILITY_KEYS.map((ability) => {
+        const bonus = c.saveBonuses[ability] ?? abilityMod(c.abilities[ability]);
+        return el("button", {
+          class: "mini-btn",
+          title: `${ability.toUpperCase()} save ${bonus >= 0 ? "+" : ""}${bonus}`,
+          text: ability.toUpperCase(),
+          onclick: () => {
+            const result = rollSave(c, ability, this.attackMode);
+            this.lastRoll = result;
+            void pushRoll(result);
+            void this.updateEncounter(logEvent(this.encounter, {
+              kind: "save",
+              text: `${c.name} ${ability.toUpperCase()} save: ${result.total}`,
+            }));
+          },
+        });
+      }),
+    ]);
+
     const conc = el("div", { class: "fighter-row" }, [
       el("button", {
         class: `mini-btn${c.concentrating ? " on" : ""}`,
@@ -1393,17 +1656,13 @@ export class Panel {
               this.patchCombatant(c.id, { concentrationNote: (e.target as HTMLInputElement).value }),
           })
         : null,
-      c.concentrating
-        ? el("button", {
-            class: "mini-btn", text: "Con save",
-            onclick: () => this.doRoll("1d20", `${c.name} — concentration`),
-          })
-        : null,
     ]);
 
     const fighter = el("div", {
       class: `fighter${isActive ? " active" : ""}${down ? " down" : ""}`,
-    }, [head, vitals, statuses, conc]);
+    }, [head, vitals, hpControls, statuses, saves, conc]);
+
+    if (this.attackFrom === c.id) fighter.append(this.renderAttackPanel(c));
 
     if (down && !c.isPlayer) {
       fighter.append(el("div", { class: "fighter-row" }, [el("span", { class: "fighter-tag", text: "Down" })]));
@@ -1431,7 +1690,35 @@ export class Panel {
           [0, 1, 2].map((i) => pip("fail", i, c.deathSaves.failures > i))),
         el("button", {
           class: "mini-btn", text: "Roll",
-          onclick: () => this.doRoll("1d20", `${c.name} — death save`),
+          onclick: () => {
+            const result = roll("1d20", { label: `${c.name} — death save` });
+            this.lastRoll = result;
+            void pushRoll(result);
+
+            const nat = result.dice[0].values[0];
+            const patch = { ...c.deathSaves };
+            if (nat === 20) {
+              void this.updateEncounter(logEvent({
+                ...this.encounter,
+                combatants: this.encounter.combatants.map((x) =>
+                  x.id === c.id ? { ...x, hp: 1, deathSaves: { successes: 0, failures: 0 } } : x
+                ),
+              }, { kind: "save", text: `${c.name} death save: natural 20 — back up at 1 HP` }));
+              return;
+            }
+            if (nat === 1) patch.failures = Math.min(3, patch.failures + 2);
+            else if (result.total >= 10) patch.successes = Math.min(3, patch.successes + 1);
+            else patch.failures = Math.min(3, patch.failures + 1);
+
+            const outcome = patch.failures >= 3 ? " — dead"
+              : patch.successes >= 3 ? " — stable" : "";
+            void this.updateEncounter(logEvent({
+              ...this.encounter,
+              combatants: this.encounter.combatants.map((x) =>
+                x.id === c.id ? { ...x, deathSaves: patch } : x
+              ),
+            }, { kind: "save", text: `${c.name} death save: ${result.total}${outcome}` }));
+          },
         }),
       ]));
     }
@@ -1471,25 +1758,14 @@ export class Panel {
         fighter.append(el("div", { class: "fighter-row" }, [
           el("button", {
             class: "mini-btn", text: "Stat block",
-            onclick: () => this.open(rule),
+            onclick: () => { this.tab = "search"; this.open(rule); },
           }),
-          ...(rule.monster?.actions ?? [])
-            .filter((a) => a.value?.startsWith("+"))
-            .slice(0, 3)
-            .map((a) =>
-              el("button", {
-                class: "mini-btn",
-                text: `${a.name} ${a.value}`,
-                onclick: () => this.doRoll(`1d20 ${a.value}`, `${c.name} — ${a.name}`),
-              })
-            ),
         ]));
       }
     }
 
     return fighter;
   }
-
   // ------------------------------------------------------------ pinned --
   private renderPinned(): HTMLElement {
     const body = el("div", { class: "body" });
@@ -1598,6 +1874,16 @@ export class Panel {
           el("span", { class: "label", text: "Appearance" }), appearance,
         ]),
         el("div", { class: "set-group" }, [
+          el("span", { class: "label", text: "Content packs" }),
+          el("div", { class: "set-list" }, [
+            this.packRow({
+              id: "srd", name: "D&D SRD 5.1", license: "CC BY 4.0",
+              attribution: SRD_ATTRIBUTION,
+            }),
+            ...this.sources.map((source) => this.packRow(source)),
+          ]),
+        ]),
+        el("div", { class: "set-group" }, [
           el("span", { class: "label", text: "Party" }),
           el("div", { class: "qa-list" }, [
             el("button", {
@@ -1619,6 +1905,29 @@ export class Panel {
           ]),
         ]),
       ]),
+    ]);
+  }
+
+  private packRow(source: SourceRecord): HTMLElement {
+    const on = this.settings.packs[source.id] !== false;
+    const count = this.rules.filter((r) => (r.source ?? "srd") === source.id).length;
+    return el("label", {
+      class: `set-row${on ? "" : " off"}`,
+      title: source.attribution,
+      onclick: async (e: Event) => {
+        e.preventDefault();
+        this.settings = await saveSettings({
+          packs: { ...this.settings.packs, [source.id]: !on },
+        });
+        this.render();
+      },
+    }, [
+      el("span", { class: "check" }, [icon("check", 11, 2.5)]),
+      el("div", { class: "set-text" }, [
+        el("b", { text: source.name }),
+        el("span", { text: source.license }),
+      ]),
+      el("span", { class: "set-count", text: String(count) }),
     ]);
   }
 

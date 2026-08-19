@@ -1,7 +1,9 @@
 // SRD source -> src/data/rules.json. Run at build time only — the output
 // is generated and must not be hand-edited (edit data-src/ instead).
 import { readFileSync, writeFileSync } from "node:fs";
-import { RULE_GROUPS, type Flow, type QuickAction, type Rule, type RuleGroup } from "../src/types";
+import {
+  RULE_GROUPS, type Flow, type QuickAction, type Rule, type RuleGroup, type SourceRecord,
+} from "../src/types";
 
 type SourceEntry = Omit<Rule, "group" | "body" | "seeAlso"> & {
   group?: RuleGroup;
@@ -25,8 +27,11 @@ const SOURCE_PATHS = [
   "data-src/srd-monsters-source.json",
   "data-src/srd-magic-items-source.json",
   "data-src/srd-classes-source.json",
+  "data-src/open5e-source.json",
 ];
 const EXTRAS_PATH = "data-src/rule-extras.json";
+const SOURCES_PATH = "data-src/sources.json";
+const SOURCES_OUTPUT_PATH = "src/data/sources.json";
 const FLOWS_PATH = "data-src/flows.json";
 const OUTPUT_PATH = "src/data/rules.json";
 const FLOWS_OUTPUT_PATH = "src/data/flows.json";
@@ -126,8 +131,23 @@ const rules: Rule[] = source
   })
   .sort((a, b) => a.group.localeCompare(b.group) || a.title.localeCompare(b.title));
 
+// Every non-SRD source must carry the notice its licence demands, or the
+// entries citing it cannot ship.
+const sources = JSON.parse(readFileSync(SOURCES_PATH, "utf8")) as SourceRecord[];
+const sourceIds = new Set(sources.map((s) => s.id));
+for (const source of sources) {
+  if (!source.attribution?.trim()) fail(`source "${source.id}" has no attribution notice`);
+  if (!source.license?.trim()) fail(`source "${source.id}" has no licence`);
+}
+for (const rule of rules) {
+  if (rule.source && !sourceIds.has(rule.source)) {
+    fail(`"${rule.id}" cites unknown source "${rule.source}"`);
+  }
+}
+
 writeFileSync(OUTPUT_PATH, JSON.stringify(rules) + "\n");
 writeFileSync(FLOWS_OUTPUT_PATH, JSON.stringify(flows) + "\n");
+writeFileSync(SOURCES_OUTPUT_PATH, JSON.stringify(sources) + "\n");
 
 const counts = rules.reduce<Record<string, number>>((acc, r) => {
   acc[r.group] = (acc[r.group] ?? 0) + 1;
