@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Rules Overlay — Party</title>
+<link rel="stylesheet" href="theme.css" />
+<link rel="stylesheet" href="panel.css" />
+<style>
+  body {
+    margin: 0;
+    padding: 40px 20px 80px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+  }
+  main { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+  header { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+  h1 {
+    font-family: var(--font-heading);
+    font-size: 30px;
+    font-weight: 500;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .sub { font-size: 13.5px; color: var(--color-neutral-700); margin: 4px 0 0; max-width: 62ch; line-height: 1.6; }
+  .toolbar { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .char {
+    border: 1px solid var(--color-divider);
+    background: var(--panel-bg);
+    display: flex;
+    flex-direction: column;
+  }
+  .char-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--color-divider);
+    flex-wrap: wrap;
+  }
+  .char-name {
+    font-family: var(--font-heading);
+    font-size: 22px;
+    background: none;
+    border: 0;
+    border-bottom: 1px dashed var(--color-divider);
+    color: var(--color-text);
+    padding: 2px 0;
+    min-width: 180px;
+  }
+  .char-name:focus { outline: 0; border-bottom-color: var(--color-accent); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 1px;
+    background: var(--color-divider);
+    border-bottom: 1px solid var(--color-divider);
+  }
+  .cell {
+    background: var(--color-bg);
+    padding: 9px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .cell input {
+    width: 100%;
+    text-align: center;
+    font-family: var(--font-heading);
+    font-size: 19px;
+    font-variant-numeric: tabular-nums;
+    background: none;
+    border: 0;
+    color: var(--color-text);
+  }
+  .cell input:focus { outline: 0; background: var(--color-accent-100); }
+
+  .lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1px; background: var(--color-divider); }
+  .list { background: var(--color-bg); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .list li {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 13.5px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--color-divider);
+  }
+  .list li .custom { font-family: var(--font-heading); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-600); }
+  .list li button { margin-left: auto; }
+  .adder { display: flex; gap: 6px; position: relative; }
+  .suggest {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 5;
+    background: var(--color-bg);
+    border: 1px solid var(--color-divider);
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .suggest button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--color-divider);
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 13px;
+    color: inherit;
+    cursor: pointer;
+  }
+  .suggest button:hover { background: var(--color-accent-100); }
+  .suggest .hint { font-size: 11px; color: var(--color-neutral-600); display: block; }
+
+  .notes { padding: 12px 14px; border-top: 1px solid var(--color-divider); }
+  .notes textarea {
+    width: 100%;
+    min-height: 60px;
+    font: inherit;
+    font-size: 13.5px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-divider);
+    color: var(--color-text);
+    padding: 8px;
+    resize: vertical;
+  }
+  .empty-state { padding: 40px 14px; text-align: center; color: var(--color-neutral-700); }
+  .status { font-size: 13px; color: var(--color-accent-700); min-height: 18px; }
+</style>
+</head>
+<body class="ro-root">
+  <main>
+    <header>
+      <div>
+        <h1>Your party</h1>
+        <p class="sub">
+          Stored on this device only — there is no account and nothing is uploaded.
+          Use export to hand the party file to another player, and import to load theirs.
+        </p>
+      </div>
+      <div class="toolbar">
+        <button id="add" class="btn-primary" type="button">Add character</button>
+        <button id="export" class="mini-btn" type="button">Export</button>
+        <button id="import" class="mini-btn" type="button">Import</button>
+        <input id="file" type="file" accept="application/json,.json" hidden />
+      </div>
+    </header>
+    <p class="status" id="status"></p>
+    <div id="list"></div>
+  </main>
+  <script src="party.js"></script>
+</body>
+</html>

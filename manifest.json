@@ -18,7 +18,7 @@
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "permissions": ["storage", "sidePanel"],
+  "permissions": ["storage", "sidePanel", "downloads"],
   "commands": {
     "toggle-overlay": {
       "suggested_key": {
@@ -45,7 +45,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["data/rules.json", "data/aliases.json"],
+      "resources": ["data/rules.json", "data/aliases.json", "data/flows.json"],
       "matches": ["<all_urls>"]
     }
   ]

@@ -1,0 +1,416 @@
+{
+  "_comment": "Hand-authored extras merged onto rules by scripts/build-rules.ts. tldr powers 'Explain simply', keywords feed the natural-language search pass, actions become the Quick Actions row. Keyed by rule id.",
+
+  "mounted-combat": {
+    "tldr": "You can ride a creature one size larger than you. If it's trained you control it, but a controlled mount only gets to Dash, Disengage or Dodge on its turn. Mounting costs half your movement.",
+    "example": "A Medium fighter rides a Large warhorse. Climbing on costs 15 of their 30 ft of movement. On the fighter's turn the horse moves with them and can Dash; the fighter still gets their own full action to attack.",
+    "keywords": ["mount", "horse", "riding", "ride", "steed", "saddle", "knocked", "thrown", "dismount", "warhorse"],
+    "actions": [
+      { "kind": "check", "label": "Roll Animal Handling", "ability": "Wisdom (Animal Handling)" },
+      { "kind": "note", "label": "Mount / dismount", "text": "Mounting or dismounting costs movement equal to half your speed. You can't do it if you have 0 movement left." },
+      { "kind": "flow", "label": "I fall off my mount", "flowId": "fall-off-mount" },
+      { "kind": "rule", "label": "Prone", "ruleId": "prone" },
+      { "kind": "rule", "label": "Falling damage", "ruleId": "falling" }
+    ]
+  },
+
+  "falling": {
+    "tldr": "You take 1d6 bludgeoning per 10 feet fallen, capped at 20d6, and you land prone.",
+    "example": "Falling 40 feet is 4d6 damage — and you're prone when you land, so getting up costs half your movement next turn.",
+    "keywords": ["fall", "fell", "drop", "dropped", "height", "cliff", "pit", "ledge", "gravity", "plummet"],
+    "actions": [
+      { "kind": "perUnit", "label": "Roll fall damage", "expr": "1d6", "unit": "feet fallen", "unitSize": 10 },
+      { "kind": "rule", "label": "Prone", "ruleId": "prone" },
+      { "kind": "flow", "label": "I fall off my mount", "flowId": "fall-off-mount" }
+    ]
+  },
+
+  "prone": {
+    "tldr": "Prone means you can only crawl (or stand up, which costs half your speed). You attack at disadvantage; melee attackers get advantage on you, ranged attackers get disadvantage.",
+    "example": "A prone goblin is easier to stab than to shoot: the fighter next to it has advantage, the ranger 60 ft away has disadvantage.",
+    "keywords": ["knocked", "down", "floor", "ground", "stand", "standing", "crawl", "tripped", "flat"],
+    "actions": [
+      { "kind": "note", "label": "Cost to stand", "text": "Standing up costs movement equal to half your speed — 15 ft for a speed of 30." },
+      { "kind": "rule", "label": "Shoving a creature", "ruleId": "shoving-a-creature" },
+      { "kind": "rule", "label": "Advantage & disadvantage", "ruleId": "advantage-and-disadvantage" }
+    ]
+  },
+
+  "opportunity-attack": {
+    "tldr": "When a creature you can see leaves your reach, you can spend your reaction to make one melee attack against it. Disengaging, teleporting, or being moved against its will doesn't trigger it.",
+    "example": "The goblin steps from 5 ft to 15 ft away — you get one swing. If it had Disengaged first, you get nothing.",
+    "keywords": ["aoo", "leaves", "leaving", "reach", "runs", "away", "flee", "retreat", "provoke", "free", "attack"],
+    "actions": [
+      { "kind": "check", "label": "Roll the attack", "ability": "attack roll" },
+      { "kind": "rule", "label": "Reactions", "ruleId": "reactions" },
+      { "kind": "rule", "label": "Disengage", "ruleId": "disengage" }
+    ]
+  },
+
+  "grappling": {
+    "tldr": "Replace one attack with a Strength (Athletics) check against the target's Athletics or Acrobatics. Win and its speed drops to 0. You need a free hand and a target no more than one size larger.",
+    "example": "A fighter with Extra Attack swings once, then grapples with the second attack instead of swinging again.",
+    "keywords": ["grab", "hold", "wrestle", "pin", "restrain", "escape", "grapple"],
+    "actions": [
+      { "kind": "check", "label": "Roll Athletics", "ability": "Strength (Athletics)" },
+      { "kind": "check", "label": "Roll escape (Acrobatics)", "ability": "Dexterity (Acrobatics)" },
+      { "kind": "rule", "label": "Grappled condition", "ruleId": "grappled" },
+      { "kind": "rule", "label": "Shoving a creature", "ruleId": "shoving-a-creature" }
+    ]
+  },
+
+  "shoving-a-creature": {
+    "tldr": "Replace one attack with a Strength (Athletics) check against the target's Athletics or Acrobatics. Win and you either knock it prone or push it 5 feet.",
+    "example": "Shove the ogre prone, then every melee ally attacking it this round has advantage.",
+    "keywords": ["push", "shove", "knock", "trip", "topple", "away"],
+    "actions": [
+      { "kind": "check", "label": "Roll Athletics", "ability": "Strength (Athletics)" },
+      { "kind": "rule", "label": "Prone", "ruleId": "prone" },
+      { "kind": "rule", "label": "Grappling", "ruleId": "grappling" }
+    ]
+  },
+
+  "concentration": {
+    "tldr": "One concentration spell at a time. Take damage and you make a Constitution save — DC 10, or half the damage taken if that's higher — or the spell ends.",
+    "example": "Hold Person is up and you take 26 damage. The DC is 13 (half of 26), not 10.",
+    "keywords": ["conc", "maintain", "focus", "broken", "break", "lose", "damage", "save", "spell"],
+    "actions": [
+      { "kind": "check", "label": "Roll Con save", "ability": "Constitution save" },
+      { "kind": "flow", "label": "I took damage while concentrating", "flowId": "concentration-check" },
+      { "kind": "rule", "label": "Spell duration", "ruleId": "spell-duration" }
+    ]
+  },
+
+  "death-saving-throws": {
+    "tldr": "At 0 HP you roll a d20 at the start of each turn. 10 or higher is a success, under 10 a failure. Three successes stabilises you, three failures kills you. A natural 20 puts you back up at 1 HP; a natural 1 counts as two failures.",
+    "example": "Taking any damage while down is an automatic failure — two if the hit was a critical.",
+    "keywords": ["dying", "die", "dead", "down", "bleeding", "zero", "unconscious", "stabilise", "stabilize", "revive"],
+    "actions": [
+      { "kind": "roll", "label": "Roll a death save", "expr": "1d20" },
+      { "kind": "flow", "label": "I dropped to 0 HP", "flowId": "dropped-to-zero" },
+      { "kind": "rule", "label": "Stabilizing a creature", "ruleId": "stabilizing-a-creature" },
+      { "kind": "rule", "label": "Unconscious", "ruleId": "unconscious" }
+    ]
+  },
+
+  "critical-hits": {
+    "tldr": "A natural 20 always hits and is a critical: roll the attack's damage dice twice, then add your modifiers once.",
+    "example": "A greatsword crit is 4d6 + Str, not 2d6 doubled including the modifier.",
+    "keywords": ["crit", "nat", "natural", "twenty", "double", "dice"],
+    "actions": [
+      { "kind": "check", "label": "Roll an attack", "ability": "attack roll" },
+      { "kind": "rule", "label": "Attack rolls", "ruleId": "attack-rolls" }
+    ]
+  },
+
+  "advantage-and-disadvantage": {
+    "tldr": "Roll two d20s and take the higher (advantage) or lower (disadvantage). They never stack, and having both at once cancels out to a single normal roll.",
+    "example": "Three sources of advantage and one of disadvantage? You roll one plain d20.",
+    "keywords": ["adv", "dis", "stack", "cancel", "two", "dice", "reroll"],
+    "actions": [
+      { "kind": "roll", "label": "Roll with advantage", "expr": "1d20" },
+      { "kind": "roll", "label": "Roll with disadvantage", "expr": "1d20" }
+    ]
+  },
+
+  "cover": {
+    "tldr": "Half cover gives +2 AC and Dex saves, three-quarters gives +5, and total cover means you can't be targeted at all.",
+    "example": "An archer behind a low wall has half cover: AC 15 becomes effectively 17 against your shot.",
+    "keywords": ["behind", "wall", "obstacle", "hiding", "blocked", "shield", "protection"],
+    "actions": [
+      { "kind": "rule", "label": "Armor Class", "ruleId": "armor-class" },
+      { "kind": "rule", "label": "Ranged attacks in melee", "ruleId": "ranged-attacks-in-melee" }
+    ]
+  },
+
+  "jumping": {
+    "tldr": "With a 10-foot run-up, you long jump your Strength score in feet and high jump 3 + your Str modifier. Without the run-up, halve it. The distance comes out of your movement.",
+    "example": "Str 16 with a run-up clears a 16-foot gap; standing still, 8 feet.",
+    "keywords": ["jump", "leap", "gap", "chasm", "across", "vault", "hop", "distance"],
+    "actions": [
+      { "kind": "check", "label": "Roll Athletics", "ability": "Strength (Athletics)" },
+      { "kind": "rule", "label": "Movement and speed", "ruleId": "movement-and-speed" },
+      { "kind": "rule", "label": "Falling damage", "ruleId": "falling" }
+    ]
+  },
+
+  "surprise": {
+    "tldr": "If you didn't notice the threat, you're surprised: no move, action or reaction on your first turn, and attacks against you have advantage until that turn ends.",
+    "example": "The rogue's Stealth beat the guard's passive Perception, so the guard is surprised — it loses its whole first turn.",
+    "keywords": ["ambush", "sneak", "jumped", "unaware", "first", "round", "stealth"],
+    "actions": [
+      { "kind": "roll", "label": "Roll initiative", "expr": "1d20" },
+      { "kind": "rule", "label": "Initiative", "ruleId": "initiative" },
+      { "kind": "rule", "label": "Hide (Action)", "ruleId": "hide-action" }
+    ]
+  },
+
+  "initiative": {
+    "tldr": "Everyone rolls a Dexterity check at the start of combat. Highest goes first.",
+    "keywords": ["turn", "order", "start", "combat", "roll", "first"],
+    "actions": [
+      { "kind": "roll", "label": "Roll initiative", "expr": "1d20" },
+      { "kind": "rule", "label": "Surprise", "ruleId": "surprise" }
+    ]
+  },
+
+  "hit-points-and-damage": {
+    "tldr": "Damage comes off your current HP. At 0 you drop unconscious and start rolling death saves — unless a single hit's leftover damage matches your HP maximum, which kills you instantly.",
+    "keywords": ["hp", "hurt", "wounded", "zero", "damage", "health"],
+    "actions": [
+      { "kind": "flow", "label": "I dropped to 0 HP", "flowId": "dropped-to-zero" },
+      { "kind": "rule", "label": "Death saving throws", "ruleId": "death-saving-throws" },
+      { "kind": "rule", "label": "Instant death", "ruleId": "instant-death" }
+    ]
+  },
+
+  "temporary-hit-points": {
+    "tldr": "Temp HP is a buffer that absorbs damage first. It never stacks — take the bigger number — and it can't be healed.",
+    "keywords": ["temp", "shield", "buffer", "extra", "stack"]
+  },
+
+  "healing": {
+    "tldr": "Healing can't take you above your maximum, and any single point of healing brings a dying creature back to consciousness.",
+    "keywords": ["heal", "cure", "potion", "restore", "revive", "wake"],
+    "actions": [
+      { "kind": "roll", "label": "Roll a healing potion", "expr": "2d4 + 2" },
+      { "kind": "rule", "label": "Death saving throws", "ruleId": "death-saving-throws" }
+    ]
+  },
+
+  "exhaustion": {
+    "tldr": "Six stacking levels, each worse than the last: disadvantage on checks, half speed, disadvantage on attacks and saves, half HP maximum, speed 0, then death. A long rest removes one level.",
+    "keywords": ["tired", "exhausted", "levels", "forced", "march", "no", "sleep"]
+  },
+
+  "long-rest": {
+    "tldr": "Eight hours, at most an hour of it light activity. You get all your HP back, half your Hit Dice, and shed one level of exhaustion. Once per 24 hours.",
+    "keywords": ["sleep", "camp", "overnight", "recover", "regain", "reset"]
+  },
+
+  "short-rest": {
+    "tldr": "An hour of downtime. You can spend Hit Dice to heal — roll the die and add your Constitution modifier for each one spent.",
+    "keywords": ["rest", "breather", "hit", "dice", "heal", "hour"],
+    "actions": [
+      { "kind": "roll", "label": "Spend a d8 Hit Die", "expr": "1d8" },
+      { "kind": "roll", "label": "Spend a d10 Hit Die", "expr": "1d10" }
+    ]
+  },
+
+  "two-weapon-fighting": {
+    "tldr": "Attack with a light weapon in one hand, then use your bonus action to attack with a different light weapon in the other. The off-hand attack adds no ability modifier to damage.",
+    "keywords": ["dual", "wield", "offhand", "second", "bonus", "twf", "two"],
+    "actions": [{ "kind": "rule", "label": "Attack (Action)", "ruleId": "attack-action" }]
+  },
+
+  "underwater-combat": {
+    "tldr": "Melee attacks are at disadvantage without a swim speed, unless you're using a dagger, javelin, shortsword, spear or trident. Most ranged weapons miss automatically past normal range.",
+    "keywords": ["water", "swimming", "submerged", "drown", "sea", "underwater"],
+    "actions": [{ "kind": "rule", "label": "Climbing & swimming", "ruleId": "climbing-and-swimming" }]
+  },
+
+  "ranged-attacks-in-melee": {
+    "tldr": "Firing a ranged weapon with a hostile creature within 5 feet of you gives you disadvantage.",
+    "keywords": ["bow", "shoot", "adjacent", "next", "close", "archer"],
+    "actions": [
+      { "kind": "rule", "label": "Disengage", "ruleId": "disengage" },
+      { "kind": "rule", "label": "Cover", "ruleId": "cover" }
+    ]
+  },
+
+  "difficult-terrain": {
+    "tldr": "Every foot costs two — so difficult terrain halves how far you actually get.",
+    "keywords": ["rubble", "mud", "snow", "undergrowth", "slow", "half", "movement"]
+  },
+
+  "movement-and-speed": {
+    "tldr": "You can split your movement around your action however you like, but you can't end your turn in another creature's space.",
+    "keywords": ["move", "walk", "distance", "feet", "speed", "far"],
+    "actions": [
+      { "kind": "rule", "label": "Dash", "ruleId": "dash" },
+      { "kind": "rule", "label": "Difficult terrain", "ruleId": "difficult-terrain" }
+    ]
+  },
+
+  "actions-in-combat": {
+    "tldr": "Each turn you get one action, your movement, and one reaction you can use on anyone's turn. Bonus actions only exist when a feature grants one.",
+    "keywords": ["turn", "do", "options", "action", "bonus", "reaction"],
+    "actions": [
+      { "kind": "rule", "label": "Attack", "ruleId": "attack-action" },
+      { "kind": "rule", "label": "Dash", "ruleId": "dash" },
+      { "kind": "rule", "label": "Disengage", "ruleId": "disengage" },
+      { "kind": "rule", "label": "Dodge", "ruleId": "dodge" },
+      { "kind": "rule", "label": "Help", "ruleId": "help-action" },
+      { "kind": "rule", "label": "Hide", "ruleId": "hide-action" },
+      { "kind": "rule", "label": "Ready", "ruleId": "ready-action" }
+    ]
+  },
+
+  "reactions": {
+    "tldr": "One reaction per round, refreshed at the start of your turn. Using it doesn't cost your action or movement.",
+    "keywords": ["reaction", "off", "turn", "trigger", "interrupt", "response"]
+  },
+
+  "ready-action": {
+    "tldr": "Spend your action to set a trigger and a response. When the trigger fires you spend your reaction to act. Unused, it's lost at the start of your next turn.",
+    "keywords": ["hold", "wait", "trigger", "ready", "prepare", "delay"]
+  },
+
+  "dodge": {
+    "tldr": "Attacks against you have disadvantage and you make Dex saves with advantage, until your next turn. You lose it if you're incapacitated or your speed drops to 0.",
+    "keywords": ["defend", "dodge", "avoid", "harder", "hit"]
+  },
+
+  "armor-class": {
+    "tldr": "AC is the number an attack roll has to meet or beat to hit you.",
+    "keywords": ["ac", "armour", "defense", "defence", "hit", "target"]
+  },
+
+  "attack-rolls": {
+    "tldr": "d20 + ability modifier + proficiency (if proficient) against the target's AC. Natural 1 always misses, natural 20 always hits.",
+    "keywords": ["hit", "roll", "attack", "target", "swing", "miss"],
+    "actions": [
+      { "kind": "check", "label": "Roll an attack", "ability": "attack roll" },
+      { "kind": "rule", "label": "Critical hits", "ruleId": "critical-hits" }
+    ]
+  },
+
+  "saving-throws": {
+    "tldr": "d20 + the relevant ability modifier, plus proficiency if you're proficient in that save. A spell's DC is 8 + the caster's spellcasting modifier + their proficiency.",
+    "keywords": ["save", "dc", "resist", "avoid", "half", "effect"],
+    "actions": [{ "kind": "roll", "label": "Roll a save", "expr": "1d20" }]
+  },
+
+  "ability-checks": {
+    "tldr": "d20 + ability modifier, plus proficiency if the skill applies, against a DC the DM sets.",
+    "keywords": ["check", "skill", "dc", "test", "attempt", "try"],
+    "actions": [{ "kind": "roll", "label": "Roll a check", "expr": "1d20" }]
+  },
+
+  "passive-checks": {
+    "tldr": "A passive score is just 10 + your modifiers — used when nobody's actively looking, most often passive Perception against someone's Stealth.",
+    "keywords": ["passive", "perception", "notice", "spot", "aware"]
+  },
+
+  "vision-and-light": {
+    "tldr": "Dim light means disadvantage on sight-based Perception. Darkness blinds you outright. Darkvision turns darkness into dim light, in greyscale, out to its range.",
+    "keywords": ["dark", "darkness", "light", "see", "vision", "torch", "blind", "obscured"],
+    "actions": [{ "kind": "rule", "label": "Blinded", "ruleId": "blinded" }]
+  },
+
+  "carrying-capacity": {
+    "tldr": "You can carry your Strength score × 15 pounds before anything slows you down.",
+    "keywords": ["carry", "weight", "heavy", "load", "encumbered", "lift"]
+  },
+
+  "inspiration": {
+    "tldr": "Spend it for advantage on one roll. You either have it or you don't — it never stacks.",
+    "keywords": ["inspiration", "reward", "advantage", "spend"]
+  },
+
+  "flanking": {
+    "tldr": "Flanking is an optional rule that isn't on by default. Where a table uses it, standing opposite an ally gives advantage on melee attacks — check with your DM first.",
+    "keywords": ["flank", "surround", "opposite", "sides", "optional", "variant"]
+  },
+
+  "spell-slots": {
+    "tldr": "Casting a leveled spell burns a slot of that level or higher; casting with a bigger slot often scales the effect. Slots come back on a long rest.",
+    "keywords": ["slot", "cast", "level", "upcast", "resource", "spells"]
+  },
+
+  "rituals": {
+    "tldr": "A ritual spell can be cast 10 minutes slower to avoid spending a slot, if your class allows ritual casting.",
+    "keywords": ["ritual", "free", "slot", "ten", "minutes"]
+  },
+
+  "casting-time": {
+    "tldr": "Most spells take an action. If you cast one with a bonus action, the only other spell you can cast that turn is a cantrip with a casting time of 1 action.",
+    "keywords": ["bonus", "action", "cast", "two", "spells", "same", "turn"]
+  },
+
+  "spell-components": {
+    "tldr": "V needs your voice, S needs a free hand, M needs the component (or a focus, unless the spell lists a cost).",
+    "keywords": ["verbal", "somatic", "material", "component", "focus", "silence", "hands"]
+  },
+
+  "combining-spell-effects": {
+    "tldr": "The same spell cast twice doesn't stack; different spells do.",
+    "keywords": ["stack", "combine", "same", "twice", "overlap"]
+  },
+
+  "instant-death": {
+    "tldr": "If the damage that drops you to 0 has leftover damage equal to or greater than your HP maximum, you die on the spot.",
+    "keywords": ["die", "instantly", "massive", "gone", "killed", "outright"]
+  },
+
+  "stabilizing-a-creature": {
+    "tldr": "A DC 10 Medicine check or a healer's kit stops the death saves. The creature stays unconscious at 0 HP until it gets actual healing.",
+    "keywords": ["stabilise", "stabilize", "medicine", "save", "dying", "help"],
+    "actions": [{ "kind": "check", "label": "Roll Medicine", "ability": "Wisdom (Medicine)" }]
+  },
+
+  "unconscious": {
+    "tldr": "You're incapacitated, prone, and drop what you're holding. Attacks against you have advantage, and any hit from within 5 feet is a critical.",
+    "keywords": ["ko", "out", "asleep", "knocked", "down", "helpless"]
+  },
+
+  "grappled": {
+    "tldr": "Your speed is 0. It ends if the grappler is incapacitated or something moves you out of reach.",
+    "keywords": ["held", "stuck", "escape", "speed", "zero"]
+  },
+
+  "restrained": {
+    "tldr": "Speed 0, disadvantage on attacks and Dex saves, and attackers have advantage on you.",
+    "keywords": ["net", "web", "held", "tied", "stuck"]
+  },
+
+  "paralyzed": {
+    "tldr": "Incapacitated and unable to move or speak, you fail Str and Dex saves automatically, and every hit from within 5 feet is a critical.",
+    "keywords": ["paralysed", "frozen", "hold", "person", "cant", "move"]
+  },
+
+  "stunned": {
+    "tldr": "Incapacitated, can't move, barely able to speak; you auto-fail Str and Dex saves and attackers have advantage.",
+    "keywords": ["stun", "dazed", "staggered"]
+  },
+
+  "frightened": {
+    "tldr": "Disadvantage on attacks and checks while you can see the source, and you can't move any closer to it.",
+    "keywords": ["fear", "afraid", "scared", "terror", "flee"]
+  },
+
+  "charmed": {
+    "tldr": "You can't attack or target the charmer with harmful effects, and it has advantage on social checks against you.",
+    "keywords": ["charm", "friendly", "influence", "dominated"]
+  },
+
+  "poisoned": {
+    "tldr": "Disadvantage on attack rolls and ability checks.",
+    "keywords": ["poison", "venom", "sick", "toxic"]
+  },
+
+  "blinded": {
+    "tldr": "You auto-fail anything needing sight, attack at disadvantage, and attackers have advantage on you.",
+    "keywords": ["blind", "cant", "see", "dark", "sightless"]
+  },
+
+  "invisible": {
+    "tldr": "You attack with advantage and attacks against you have disadvantage — but noise and tracks can still give you away.",
+    "keywords": ["invisibility", "unseen", "hidden", "vanish"]
+  },
+
+  "incapacitated": {
+    "tldr": "No actions and no reactions.",
+    "keywords": ["cant", "act", "helpless"]
+  },
+
+  "petrified": {
+    "tldr": "Turned to stone: incapacitated, unaware, resistant to all damage, and auto-failing Str and Dex saves.",
+    "keywords": ["stone", "statue", "medusa", "turned"]
+  },
+
+  "deafened": {
+    "tldr": "You can't hear, and auto-fail anything that needs hearing.",
+    "keywords": ["deaf", "cant", "hear", "sound"]
+  }
+}

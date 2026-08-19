@@ -942,3 +942,326 @@
     display: flex;
   }
 }
+
+/* --------------------------------------------------------------- dice -- */
+.dice {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  background: var(--color-accent-100);
+  border: 1px solid var(--color-accent-300);
+  color: var(--color-accent-800);
+  padding: 0 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dice:hover {
+  background: var(--color-accent-300);
+  color: var(--color-accent-900);
+}
+
+.rolls {
+  border-top: 1px solid var(--color-divider);
+  background: var(--color-surface);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.roll-total {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent-800);
+  line-height: 1;
+}
+
+.roll-total.crit-hit { color: var(--color-accent); }
+.roll-total.crit-miss { color: var(--color-neutral-600); }
+
+.roll-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.roll-label {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+}
+
+.roll-detail {
+  font-size: 11.5px;
+  color: var(--color-neutral-600);
+  font-variant-numeric: tabular-nums;
+}
+
+.rolls .icon-btn { margin-left: auto; }
+
+/* ------------------------------------------------------ quick actions -- */
+.qa {
+  padding: 12px 14px 14px;
+  border-bottom: 1px solid var(--color-divider);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.qa-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.qa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 6px 10px;
+  background: none;
+  border: 1px solid var(--color-divider);
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.qa-btn:hover {
+  background: var(--color-accent-100);
+  border-color: var(--color-accent-300);
+}
+
+.qa-btn svg { color: var(--color-accent); }
+
+/* -------------------------------------------------------- explain box -- */
+.explain {
+  padding: 12px 14px 14px;
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-accent-100);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.explain .prose { font-size: 14px; }
+
+.explain-example {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-neutral-800);
+  border-left: 2px solid var(--color-accent-300);
+  padding-left: 10px;
+  font-style: italic;
+}
+
+.explain-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: none;
+  border: 1px solid var(--color-accent-300);
+  color: var(--color-accent-700);
+  padding: 4px 9px;
+  cursor: pointer;
+}
+
+.explain-toggle:hover { background: var(--color-accent-100); }
+.explain-toggle.on { background: var(--color-accent); border-color: var(--color-accent); color: var(--on-accent); }
+
+/* -------------------------------------------------------------- flows -- */
+.flow-banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-accent-100);
+  cursor: pointer;
+  width: 100%;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  text-align: left;
+  color: inherit;
+}
+
+.flow-banner:hover { background: var(--color-accent-200); }
+.flow-banner svg { color: var(--color-accent); }
+
+.flow-banner-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.flow-banner-title { font-family: var(--font-heading); font-size: 15px; letter-spacing: 0.01em; }
+.flow-banner-sub { font-size: 11.5px; color: var(--color-neutral-700); }
+
+.step {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.step-n {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-accent-300);
+  color: var(--color-accent-800);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.step-main { display: flex; flex-direction: column; gap: 7px; min-width: 0; flex: 1; }
+.step-title { font-family: var(--font-heading); font-size: 16px; letter-spacing: 0.01em; }
+.step-detail { margin: 0; font-size: 13.5px; line-height: 1.55; }
+.step-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.applies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--color-neutral-700);
+}
+
+/* ------------------------------------------------------------- combat -- */
+.combat-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  background: var(--color-accent-900);
+  color: var(--color-neutral-100);
+  flex: none;
+}
+
+.combat-round {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.combat-bar button {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-accent-300);
+  background: none;
+  border: 1px solid var(--color-accent-600);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.combat-bar button:hover { color: var(--color-neutral-100); border-color: var(--color-accent-300); }
+.combat-bar .spacer { margin-left: auto; }
+
+.fighter {
+  border-bottom: 1px solid var(--color-divider);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fighter.active {
+  background: var(--color-accent-100);
+  border-left: 2px solid var(--color-accent);
+}
+
+.fighter.down { opacity: 0.62; }
+
+.fighter-head { display: flex; align-items: baseline; gap: 8px; }
+.fighter-init {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent-800);
+  min-width: 22px;
+}
+.fighter-name { font-family: var(--font-heading); font-size: 17px; letter-spacing: 0.01em; }
+.fighter-tag {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+
+.fighter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+
+.num-input {
+  width: 52px;
+  font: inherit;
+  font-family: var(--font-heading);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  color: var(--color-text);
+  padding: 2px 4px;
+}
+
+.text-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  color: var(--color-text);
+  padding: 4px 7px;
+}
+
+.mini-btn {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: none;
+  border: 1px solid var(--color-divider);
+  color: var(--color-neutral-700);
+  padding: 3px 7px;
+  cursor: pointer;
+}
+
+.mini-btn:hover { background: var(--color-accent-100); color: var(--color-accent-800); }
+.mini-btn.on { background: var(--color-accent); border-color: var(--color-accent); color: var(--on-accent); }
+.mini-btn.danger:hover { border-color: var(--color-accent-600); color: var(--color-accent-800); }
+
+.cond-chip {
+  font-family: var(--font-heading);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--color-accent-200);
+  border: 1px solid var(--color-accent-300);
+  color: var(--color-accent-900);
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.death-track { display: flex; gap: 3px; align-items: center; }
+.pip {
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--color-divider);
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+.pip.succ.on { background: var(--color-accent); border-color: var(--color-accent); }
+.pip.fail.on { background: var(--color-neutral-700); border-color: var(--color-neutral-700); }

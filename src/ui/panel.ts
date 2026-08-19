@@ -1,7 +1,13 @@
+import {
+  advance, combatantBlank, combatantFromCharacter, combatantFromMonster, EMPTY_ENCOUNTER,
+  getEncounter, onEncounterChanged, ordered, saveEncounter, TRACKED_CONDITIONS,
+} from "../combat";
 import { loadDataset } from "../data/load";
+import { clearRollLog, formatRoll, getRollLog, pushRoll, roll, rollRepeated, type RollDetail } from "../dice";
+import { getParty } from "../party";
 import { clearPins, getPins, onPinsChanged, togglePin } from "../pins";
 import {
-  buildAliasIndex, findHighlight, getRecency, recordMiss, recordView, search,
+  buildAliasIndex, findHighlight, getRecency, recordMiss, recordView, search, searchFlows,
   type SearchMatch,
 } from "../search";
 import {
@@ -10,9 +16,10 @@ import {
 } from "../settings";
 import {
   GROUP_LABELS, RULE_GROUPS,
-  type AbilityScores, type NamedEntry, type Rule, type RuleGroup,
+  type AbilityScores, type Character, type Combatant, type Encounter, type Flow,
+  type NamedEntry, type QuickAction, type Rule, type RuleGroup,
 } from "../types";
-import { el, highlighted, icon } from "./dom";
+import { el, highlighted, icon, prose } from "./dom";
 
 const ATTRIBUTION =
   "Includes material from the D&D System Reference Document 5.1, © Wizards of the Coast LLC, CC BY 4.0.";
@@ -23,7 +30,7 @@ const GROUP_ICONS: Record<RuleGroup, "bestiary" | "spells" | "rules" | "items" |
 
 const ABILITY_KEYS: (keyof AbilityScores)[] = ["str", "dex", "con", "int", "wis", "cha"];
 
-type View = "browse" | "results" | "detail" | "pinned" | "settings";
+type View = "browse" | "results" | "detail" | "pinned" | "settings" | "flow" | "combat";
 
 export type PanelOptions = {
   /** Shown as a close button in the header; omitted in the side panel. */
@@ -49,6 +56,8 @@ export class Panel {
 
   private rules: Rule[] = [];
   private rulesById = new Map<string, Rule>();
+  private flows: Flow[] = [];
+  private flowsById = new Map<string, Flow>();
   private aliasIndex = new Map<string, string>();
   private recency: Record<string, number> = {};
   private settings: Settings = DEFAULT_SETTINGS;
@@ -66,6 +75,12 @@ export class Panel {
   private history: string[] = [];
   private openSections = new Set<string>(["defenses", "traits", "actions", "reactions", "legendary"]);
   private openPin: string | null = null;
+  private explain = false;
+  private flow: Flow | null = null;
+  private lastRoll: RollDetail | null = null;
+  private encounter: Encounter = EMPTY_ENCOUNTER;
+  private party: Character[] = [];
+  private combatPicker = false;
   private input: HTMLInputElement | null = null;
   private focusMode: "none" | "caret" | "select" = "none";
   private caret = 0;
@@ -79,19 +94,25 @@ export class Panel {
   }
 
   private async init() {
-    const [{ rules, aliases }, recency, settings, pins] = await Promise.all([
-      loadDataset(), getRecency(), getSettings(), getPins(),
+    const [{ rules, aliases, flows }, recency, settings, pins, encounter, party, log] = await Promise.all([
+      loadDataset(), getRecency(), getSettings(), getPins(), getEncounter(), getParty(), getRollLog(),
     ]);
     this.rules = rules;
     this.rulesById = new Map(rules.map((r) => [r.id, r]));
+    this.flows = flows;
+    this.flowsById = new Map(flows.map((f) => [f.id, f]));
     this.aliasIndex = buildAliasIndex(aliases);
     this.recency = recency;
     this.settings = settings;
     this.pins = pins;
+    this.encounter = encounter;
+    this.party = party;
+    this.lastRoll = log[0] ?? null;
     for (const rule of rules) this.counts[rule.group] += 1;
 
     onSettingsChanged((next) => { this.settings = next; this.applyTheme(); this.render(); });
     onPinsChanged((next) => { this.pins = next; this.render(); });
+    onEncounterChanged((next) => { this.encounter = next; this.render(); });
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.applyTheme());
 
     this.applyTheme();
@@ -193,11 +214,83 @@ export class Panel {
     if (pushHistory && this.detail) this.history.push(this.detail.id);
     this.detail = rule;
     this.view = "detail";
+    this.explain = false;
     void recordView(rule.id).then(() => getRecency()).then((r) => { this.recency = r; });
     this.render();
   }
 
+  private showRoll(detail: RollDetail) {
+    this.lastRoll = detail;
+    void pushRoll(detail);
+    this.render();
+  }
+
+  private doRoll(expr: string, label?: string) {
+    this.showRoll(roll(expr, { label }));
+  }
+
+  /** Runs a quick action: rolls it, or navigates where it points. */
+  private runAction(action: QuickAction) {
+    switch (action.kind) {
+      case "roll":
+        this.doRoll(action.expr, action.label);
+        break;
+      case "check":
+        this.showRoll(roll("1d20", { label: action.ability }));
+        break;
+      case "perUnit": {
+        const raw = prompt(`How many ${action.unit}?`);
+        if (raw === null) return;
+        const amount = parseInt(raw, 10);
+        if (!Number.isFinite(amount) || amount <= 0) return;
+        this.showRoll(rollRepeated(action.expr, Math.floor(amount / action.unitSize), action.label));
+        break;
+      }
+      case "rule": {
+        const rule = this.rulesById.get(action.ruleId);
+        if (rule) this.open(rule);
+        break;
+      }
+      case "flow": {
+        const flow = this.flowsById.get(action.flowId);
+        if (flow) this.openFlow(flow);
+        break;
+      }
+      case "note":
+        alert(action.text);
+        break;
+    }
+  }
+
+  private openFlow(flow: Flow) {
+    this.flow = flow;
+    this.view = "flow";
+    this.render();
+  }
+
+  private async updateEncounter(next: Encounter) {
+    this.encounter = next;
+    await saveEncounter(next);
+    this.render();
+  }
+
+  private patchCombatant(id: string, patch: Partial<Combatant>) {
+    void this.updateEncounter({
+      ...this.encounter,
+      combatants: this.encounter.combatants.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    });
+  }
+
   private back() {
+    // Side trips (a flow, the pinned list, settings, the tracker) return to
+    // wherever you were; only the detail view walks its own history stack.
+    if (this.view !== "detail") {
+      this.flow = null;
+      this.combatPicker = false;
+      this.view = this.detail ? "detail" : this.query.trim() ? "results" : "browse";
+      this.render();
+      return;
+    }
     const prev = this.history.pop();
     if (prev && this.rulesById.has(prev)) {
       this.detail = this.rulesById.get(prev)!;
@@ -212,7 +305,7 @@ export class Panel {
   handleKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.preventDefault();
-      if (this.view === "detail" || this.view === "settings" || this.view === "pinned") this.back();
+      if (this.view !== "browse" && this.view !== "results") this.back();
       else if (this.query) { this.query = ""; this.runSearch(); this.focus(); }
       else this.opts.onClose?.();
       return;
@@ -254,17 +347,47 @@ export class Panel {
     this.input = null; // detached by the rebuild; renderSearch re-assigns it
 
     if (this.view === "detail" && this.detail) {
-      panel.append(this.renderDetailHeader(), this.renderDetailBody(this.detail), this.footer());
+      panel.append(this.renderDetailHeader(), this.renderDetailBody(this.detail));
+      panel.append(this.rollStrip() ?? this.footer());
     } else if (this.view === "settings") {
       panel.append(this.renderSubHeader("Settings"), this.renderSettings(), this.renderSettingsFoot());
     } else if (this.view === "pinned") {
-      panel.append(this.renderSubHeader("Pinned"), this.renderPinned(), this.footer());
+      panel.append(this.renderSubHeader("Session"), this.renderPinned(), this.footer());
+    } else if (this.view === "flow" && this.flow) {
+      panel.append(this.renderSubHeader("Walkthrough"), this.renderFlow(this.flow));
+      panel.append(this.rollStrip() ?? this.footer());
+    } else if (this.view === "combat") {
+      panel.append(this.renderSubHeader("Combat"), this.renderCombat());
+      panel.append(this.rollStrip() ?? this.footer());
     } else {
       panel.append(this.renderHeader(), this.renderSearch());
       panel.append(this.view === "results" ? this.renderResults() : this.renderBrowse());
       panel.append(this.view === "results" ? this.renderKeys() : this.footer());
     }
     return panel;
+  }
+
+  /** The last roll, shown as a persistent strip above the footer. */
+  private rollStrip(): HTMLElement | null {
+    const detail = this.lastRoll;
+    if (!detail) return null;
+    return el("div", { class: "rolls" }, [
+      el("span", {
+        class: `roll-total${detail.crit === "hit" ? " crit-hit" : detail.crit === "miss" ? " crit-miss" : ""}`,
+        text: String(detail.total),
+      }),
+      el("div", { class: "roll-meta" }, [
+        el("span", { class: "roll-label", text: detail.label ?? detail.expr }),
+        el("span", {
+          class: "roll-detail",
+          text: `${detail.expr} ${formatRoll(detail)}${detail.crit === "hit" ? " · critical!" : detail.crit === "miss" ? " · natural 1" : ""}`,
+        }),
+      ]),
+      el("button", {
+        class: "icon-btn", title: "Clear rolls",
+        onclick: () => { this.lastRoll = null; void clearRollLog(); this.render(); },
+      }, [icon("close", 14)]),
+    ]);
   }
 
   private headActions(extra?: HTMLElement): HTMLElement {
@@ -276,12 +399,20 @@ export class Panel {
       onclick: () => { this.view = "pinned"; this.render(); },
     }, [icon("pin", 15)]);
 
+    const combatBtn = el("button", {
+      class: `icon-btn${this.encounter.combatants.length ? " on" : ""}`,
+      title: this.encounter.combatants.length
+        ? `Combat — round ${this.encounter.round}`
+        : "Combat tracker",
+      onclick: () => { this.view = "combat"; this.render(); },
+    }, [icon("swords", 15)]);
+
     const settingsBtn = el("button", {
       class: "icon-btn", title: "Settings",
       onclick: () => { this.view = "settings"; this.render(); },
     }, [icon("settings", 15)]);
 
-    const kids: (HTMLElement | null)[] = [pinBtn, settingsBtn];
+    const kids: (HTMLElement | null)[] = [pinBtn, combatBtn, settingsBtn];
     if (this.opts.onClose) {
       kids.push(el("button", { class: "icon-btn", title: "Close", onclick: () => this.opts.onClose!() }, [icon("close", 15)]));
     }
@@ -408,6 +539,21 @@ export class Panel {
     const body = el("div", { class: "body" });
     const grouped = this.groupedMatches();
 
+    // A question like "I fall off my horse" gets the walkthrough offered
+    // above the raw hits — that is the answer they actually wanted.
+    for (const flow of searchFlows(this.query, this.flows)) {
+      body.append(el("button", {
+        class: "flow-banner",
+        onclick: () => this.openFlow(flow),
+      }, [
+        icon("flow", 18),
+        el("div", { class: "flow-banner-text" }, [
+          el("span", { class: "flow-banner-title", text: flow.title }),
+          el("span", { class: "flow-banner-sub", text: `Walk it through · ${flow.steps.length} steps` }),
+        ]),
+      ]));
+    }
+
     if (!grouped.length) {
       body.append(el("div", { class: "empty", text: "No matching entry. Try a shorter term, or table-slang like “aoo”." }));
       return body;
@@ -488,7 +634,7 @@ export class Panel {
     return el("div", { class: "section-body" }, entries.map((entry) =>
       el("div", { class: "entry" }, [
         el("div", { class: "entry-head" }, [el("span", { class: "entry-name", text: entry.name })]),
-        el("p", { class: "prose", text: entry.desc }),
+        prose(entry.desc, (expr) => this.doRoll(expr)),
       ])
     ));
   }
@@ -496,28 +642,134 @@ export class Panel {
   private renderDetailBody(rule: Rule): HTMLElement {
     const body = el("div", { class: "body" });
 
-    body.append(el("div", { class: "detail-head" }, [
+    const head = el("div", { class: "detail-head" }, [
       el("span", { class: "kicker", text: `${GROUP_LABELS[rule.group]} · SRD 5.1` }),
       el("h1", { class: "detail-title", text: rule.title }),
       rule.subtitle ? el("span", { class: "detail-sub", text: rule.subtitle }) : null,
+    ]);
+    if (rule.tldr) {
+      head.append(el("div", { style: "margin-top:10px" }, [
+        el("button", {
+          class: `explain-toggle${this.explain ? " on" : ""}`,
+          text: this.explain ? "Show full rule" : "Explain simply",
+          onclick: () => { this.explain = !this.explain; this.render(); },
+        }),
+      ]));
+    }
+    body.append(head);
+
+    if (this.explain && rule.tldr) {
+      body.append(el("div", { class: "explain" }, [
+        el("span", { class: "label", text: "TL;DR" }),
+        prose(rule.tldr, (expr) => this.doRoll(expr)),
+        rule.example ? el("div", { class: "explain-example", text: rule.example }) : null,
+      ]));
+    }
+
+    const actions = this.quickActions(rule);
+    const pinned = this.pins.includes(rule.id);
+    body.append(el("div", { class: "qa" }, [
+      el("span", { class: "label", text: "Quick actions" }),
+      el("div", { class: "qa-list" }, [
+        ...actions.map((action) =>
+          el("button", {
+            class: "qa-btn",
+            onclick: () => this.runAction(action),
+          }, [icon(this.actionIcon(action), 14), action.label])
+        ),
+        el("button", {
+          class: "qa-btn",
+          onclick: async () => { this.pins = await togglePin(rule.id); this.render(); },
+        }, [icon("pin", 14), pinned ? "Unpin from session" : "Pin for this session"]),
+        el("button", {
+          class: "qa-btn",
+          onclick: () => this.addToCombat(rule),
+        }, [icon("swords", 14), rule.monster ? "Add to combat" : "Open combat tracker"]),
+      ]),
     ]));
 
     if (rule.monster) body.append(...this.renderMonster(rule));
     else if (rule.spell) body.append(...this.renderSpell(rule));
     else body.append(...this.renderProse(rule));
 
-    if (rule.seeAlso?.length) {
-      const links: (Node | string)[] = ["See also: "];
-      rule.seeAlso.forEach((id, i) => {
-        const related = this.rulesById.get(id);
-        if (!related) return;
-        if (i > 0) links.push(", ");
-        links.push(el("button", { text: related.title, onclick: () => this.open(related) }));
-      });
-      body.append(el("div", { class: "see-also" }, links));
-    }
-
+    body.append(...this.renderGraph(rule));
     return body;
+  }
+
+  private actionIcon(action: QuickAction): "dice" | "rules" | "flow" | "diamond" {
+    if (action.kind === "roll" || action.kind === "check" || action.kind === "perUnit") return "dice";
+    if (action.kind === "rule") return "rules";
+    if (action.kind === "flow") return "flow";
+    return "diamond";
+  }
+
+  /**
+   * Authored actions where they exist, plus generic ones derived from the
+   * entry itself — a monster's attacks are rollable without anyone having
+   * hand-written a button for them.
+   */
+  private quickActions(rule: Rule): QuickAction[] {
+    const actions: QuickAction[] = [...(rule.actions ?? [])];
+
+    for (const attack of rule.monster?.actions ?? []) {
+      if (attack.value?.startsWith("+")) {
+        actions.push({ kind: "roll", label: `${attack.name} ${attack.value}`, expr: `1d20 ${attack.value}` });
+      }
+    }
+    return actions.slice(0, 8);
+  }
+
+  /** Drops a monster straight into the tracker, rolling its initiative. */
+  private addToCombat(rule: Rule) {
+    if (!rule.monster) { this.view = "combat"; this.render(); return; }
+
+    const existing = this.encounter.combatants.filter((c) => c.ruleId === rule.id).length;
+    const combatant = combatantFromMonster(rule, existing ? String(existing + 1) : undefined);
+    combatant.initiative = roll("1d20").total + Math.floor((rule.monster.abilities.dex - 10) / 2);
+
+    void this.updateEncounter({
+      ...this.encounter,
+      combatants: [...this.encounter.combatants, combatant],
+    });
+    this.view = "combat";
+  }
+
+  /**
+   * The rules graph: direct cross-references plus anything pointing back at
+   * this entry, so related rules are reachable from either end.
+   */
+  private renderGraph(rule: Rule): HTMLElement[] {
+    const linked = new Set(rule.seeAlso ?? []);
+    for (const other of this.rules) {
+      if (other.seeAlso?.includes(rule.id)) linked.add(other.id);
+    }
+    linked.delete(rule.id);
+    if (!linked.size) return [];
+
+    const related = Array.from(linked)
+      .map((id) => this.rulesById.get(id))
+      .filter((r): r is Rule => !!r)
+      .slice(0, 10);
+    if (!related.length) return [];
+
+    const flows = this.flows.filter((f) => f.steps.some((s) => s.ruleId === rule.id));
+
+    const out = [el("div", { class: "qa" }, [
+      el("span", { class: "label", text: "Related rules" }),
+      el("div", { class: "qa-list" }, related.map((r) =>
+        el("button", { class: "qa-btn", onclick: () => this.open(r) }, [icon("rules", 14), r.title])
+      )),
+    ])];
+
+    if (flows.length) {
+      out.push(el("div", { class: "qa" }, [
+        el("span", { class: "label", text: "Walkthroughs using this rule" }),
+        el("div", { class: "qa-list" }, flows.map((f) =>
+          el("button", { class: "qa-btn", onclick: () => this.openFlow(f) }, [icon("flow", 14), f.prompt])
+        )),
+      ]));
+    }
+    return out;
   }
 
   private renderMonster(rule: Rule): HTMLElement[] {
@@ -580,7 +832,7 @@ export class Panel {
               a.label ? el("span", { class: "entry-label", text: a.label }) : null,
               a.value ? el("span", { class: "entry-value", text: a.value }) : null,
             ]),
-            el("p", { class: "prose", text: a.desc }),
+            prose(a.desc, (expr) => this.doRoll(expr, `${rule.title} — ${a.name}`)),
           ])
         )),
       ]));
@@ -606,10 +858,10 @@ export class Panel {
     ].filter(Boolean) as HTMLElement[];
 
     const out: HTMLElement[] = [el("div", { class: "section-body" }, meta)];
-    out.push(el("div", { class: "section-body" }, [el("p", { class: "prose", text: rule.body })]));
+    out.push(el("div", { class: "section-body" }, [prose(rule.body, (expr) => this.doRoll(expr, rule.title))]));
     if (s.higherLevel) {
       out.push(...this.section("higher", "At higher levels", null, () => [
-        el("div", { class: "section-body" }, [el("p", { class: "prose", text: s.higherLevel! })]),
+        el("div", { class: "section-body" }, [prose(s.higherLevel!, (expr) => this.doRoll(expr, rule.title))]),
       ]));
     }
     return out;
@@ -633,7 +885,317 @@ export class Panel {
       ].filter(Boolean) as HTMLElement[];
       if (kv.length) meta.push(el("div", { class: "section-body" }, kv));
     }
-    return [...meta, el("div", { class: "section-body" }, [el("p", { class: "prose", text: rule.body })])];
+    return [...meta, el("div", { class: "section-body" }, [prose(rule.body, (expr) => this.doRoll(expr, rule.title))])];
+  }
+
+  // -------------------------------------------------------------- flow --
+  private renderFlow(flow: Flow): HTMLElement {
+    const body = el("div", { class: "body" });
+
+    body.append(el("div", { class: "detail-head" }, [
+      el("span", { class: "kicker", text: "Walkthrough" }),
+      el("h1", { class: "detail-title", text: flow.title }),
+      el("span", { class: "detail-sub", text: `“${flow.prompt}”` }),
+    ]));
+
+    flow.steps.forEach((step, i) => {
+      const buttons: HTMLElement[] = [];
+
+      if (step.roll) {
+        buttons.push(el("button", {
+          class: "qa-btn",
+          onclick: () => this.doRoll(step.roll!.expr, step.roll!.label),
+        }, [icon("dice", 14), step.roll.label]));
+      }
+      if (step.perUnit) {
+        buttons.push(el("button", {
+          class: "qa-btn",
+          onclick: () => this.runAction({ kind: "perUnit", ...step.perUnit! }),
+        }, [icon("dice", 14), step.perUnit.label]));
+      }
+      const rule = step.ruleId ? this.rulesById.get(step.ruleId) : undefined;
+      if (rule) {
+        buttons.push(el("button", {
+          class: "qa-btn",
+          onclick: () => this.open(rule),
+        }, [icon("rules", 14), rule.title]));
+      }
+
+      const main = el("div", { class: "step-main" }, [
+        el("span", { class: "step-title", text: step.title }),
+        step.detail ? prose(step.detail, (expr) => this.doRoll(expr)) : null,
+        buttons.length ? el("div", { class: "step-actions" }, buttons) : null,
+      ]);
+
+      const applied = (step.applies ?? [])
+        .map((id) => this.rulesById.get(id))
+        .filter((r): r is Rule => !!r);
+      if (applied.length) {
+        main.append(el("div", { class: "applies" }, [
+          el("span", { class: "label", text: "Now applies" }),
+          ...applied.map((r) =>
+            el("button", { class: "cond-chip", text: r.title, onclick: () => this.open(r) })
+          ),
+        ]));
+      }
+
+      body.append(el("div", { class: "step" }, [
+        el("span", { class: "step-n", text: String(i + 1) }),
+        main,
+      ]));
+    });
+
+    return body;
+  }
+
+  // ------------------------------------------------------------ combat --
+  private renderCombat(): HTMLElement {
+    const body = el("div", { class: "body" });
+    const list = ordered(this.encounter);
+    const active = list[this.encounter.turn];
+
+    body.append(el("div", { class: "combat-bar" }, [
+      el("span", { class: "combat-round", text: `Round ${this.encounter.round}` }),
+      el("span", { class: "spacer" }),
+      el("button", { text: "Prev", onclick: () => void this.updateEncounter(advance(this.encounter, -1)) }),
+      el("button", { text: "Next turn", onclick: () => void this.updateEncounter(advance(this.encounter, 1)) }),
+    ]));
+
+    body.append(el("div", { class: "qa" }, [
+      el("div", { class: "qa-list" }, [
+        el("button", {
+          class: "qa-btn",
+          onclick: () => { this.combatPicker = !this.combatPicker; this.render(); },
+        }, [icon("plus", 14), "Add combatant"]),
+        el("button", {
+          class: "qa-btn",
+          onclick: () => this.doRoll("1d20", "Initiative"),
+        }, [icon("dice", 14), "Roll initiative"]),
+        el("button", {
+          class: "qa-btn",
+          onclick: () => void this.updateEncounter(EMPTY_ENCOUNTER),
+        }, [icon("trash", 14), "End encounter"]),
+      ]),
+    ]));
+
+    if (this.combatPicker) body.append(this.renderCombatPicker());
+
+    if (!list.length) {
+      body.append(el("div", {
+        class: "empty",
+        text: "No one in the fight yet. Add your party, or open a monster and use “Add to combat”.",
+      }));
+      return body;
+    }
+
+    for (const c of list) {
+      body.append(this.renderCombatant(c, active?.id === c.id));
+    }
+    return body;
+  }
+
+  private renderCombatPicker(): HTMLElement {
+    const rows: HTMLElement[] = [];
+
+    for (const character of this.party) {
+      rows.push(el("button", {
+        class: "qa-btn",
+        onclick: () => {
+          const combatant = combatantFromCharacter(character);
+          combatant.initiative = roll("1d20").total + Math.floor((character.abilities.dex - 10) / 2);
+          this.combatPicker = false;
+          void this.updateEncounter({
+            ...this.encounter,
+            combatants: [...this.encounter.combatants, combatant],
+          });
+        },
+      }, [icon("classes", 14), character.name]));
+    }
+
+    rows.push(el("button", {
+      class: "qa-btn",
+      onclick: () => {
+        const name = prompt("Name this combatant");
+        if (!name) return;
+        this.combatPicker = false;
+        void this.updateEncounter({
+          ...this.encounter,
+          combatants: [...this.encounter.combatants, combatantBlank(name)],
+        });
+      },
+    }, [icon("plus", 14), "Blank combatant"]));
+
+    return el("div", { class: "qa" }, [
+      el("span", {
+        class: "label",
+        text: this.party.length ? "Add from your party" : "No party saved yet — open the party page from settings",
+      }),
+      el("div", { class: "qa-list" }, rows),
+    ]);
+  }
+
+  private renderCombatant(c: Combatant, isActive: boolean): HTMLElement {
+    const down = c.hp <= 0;
+
+    const number = (value: number, onChange: (next: number) => void, label: string) =>
+      el("input", {
+        class: "num-input", type: "number", value: String(value), "aria-label": label,
+        onchange: (e: Event) => onChange(parseInt((e.target as HTMLInputElement).value, 10) || 0),
+      });
+
+    const head = el("div", { class: "fighter-head" }, [
+      el("span", { class: "fighter-init", text: String(c.initiative) }),
+      el("span", { class: "fighter-name", text: c.name }),
+      c.isPlayer ? el("span", { class: "fighter-tag", text: "PC" }) : null,
+      el("button", {
+        class: "icon-btn", title: "Remove",
+        style: "margin-left:auto",
+        onclick: () => void this.updateEncounter({
+          ...this.encounter,
+          combatants: this.encounter.combatants.filter((x) => x.id !== c.id),
+        }),
+      }, [icon("close", 13)]),
+    ]);
+
+    const vitals = el("div", { class: "fighter-row" }, [
+      el("span", { class: "stat-k", text: "HP" }),
+      number(c.hp, (hp) => this.patchCombatant(c.id, { hp }), "hit points"),
+      el("span", { text: `/ ${c.maxHp}` }),
+      el("span", { class: "stat-k", text: "AC" }),
+      number(c.ac, (ac) => this.patchCombatant(c.id, { ac }), "armor class"),
+      el("span", { class: "stat-k", text: "Init" }),
+      number(c.initiative, (initiative) => this.patchCombatant(c.id, { initiative }), "initiative"),
+    ]);
+
+    const movementLeft = Math.max(0, c.speed - c.movementUsed);
+    const statuses = el("div", { class: "fighter-row" }, [
+      el("button", {
+        class: `mini-btn${c.reactionUsed ? "" : " on"}`,
+        title: "Reaction available",
+        text: c.reactionUsed ? "Reaction used" : "Reaction ready",
+        onclick: () => this.patchCombatant(c.id, { reactionUsed: !c.reactionUsed }),
+      }),
+      el("span", { class: "stat-k", text: "Move" }),
+      el("span", { text: `${movementLeft} / ${c.speed} ft` }),
+      el("button", {
+        class: "mini-btn", text: "−5",
+        onclick: () => this.patchCombatant(c.id, { movementUsed: Math.min(c.speed, c.movementUsed + 5) }),
+      }),
+      el("button", {
+        class: "mini-btn", text: "Reset",
+        onclick: () => this.patchCombatant(c.id, { movementUsed: 0 }),
+      }),
+    ]);
+
+    const conc = el("div", { class: "fighter-row" }, [
+      el("button", {
+        class: `mini-btn${c.concentrating ? " on" : ""}`,
+        text: "Concentrating",
+        onclick: () => this.patchCombatant(c.id, { concentrating: !c.concentrating }),
+      }),
+      c.concentrating
+        ? el("input", {
+            class: "text-input", type: "text", value: c.concentrationNote,
+            placeholder: "on what?", "aria-label": "concentration note",
+            onchange: (e: Event) =>
+              this.patchCombatant(c.id, { concentrationNote: (e.target as HTMLInputElement).value }),
+          })
+        : null,
+      c.concentrating
+        ? el("button", {
+            class: "mini-btn", text: "Con save",
+            onclick: () => this.doRoll("1d20", `${c.name} — concentration`),
+          })
+        : null,
+    ]);
+
+    const fighter = el("div", {
+      class: `fighter${isActive ? " active" : ""}${down ? " down" : ""}`,
+    }, [head, vitals, statuses, conc]);
+
+    if (down && !c.isPlayer) {
+      fighter.append(el("div", { class: "fighter-row" }, [el("span", { class: "fighter-tag", text: "Down" })]));
+    }
+
+    if (down && c.isPlayer) {
+      const pip = (kind: "succ" | "fail", index: number, filled: boolean) =>
+        el("button", {
+          class: `pip ${kind}${filled ? " on" : ""}`,
+          "aria-label": `${kind} ${index + 1}`,
+          onclick: () => {
+            const key = kind === "succ" ? "successes" : "failures";
+            const current = c.deathSaves[key];
+            this.patchCombatant(c.id, {
+              deathSaves: { ...c.deathSaves, [key]: current === index + 1 ? index : index + 1 },
+            });
+          },
+        });
+
+      fighter.append(el("div", { class: "fighter-row" }, [
+        el("span", { class: "stat-k", text: "Death" }),
+        el("span", { class: "death-track" },
+          [0, 1, 2].map((i) => pip("succ", i, c.deathSaves.successes > i))),
+        el("span", { class: "death-track" },
+          [0, 1, 2].map((i) => pip("fail", i, c.deathSaves.failures > i))),
+        el("button", {
+          class: "mini-btn", text: "Roll",
+          onclick: () => this.doRoll("1d20", `${c.name} — death save`),
+        }),
+      ]));
+    }
+
+    const conditions = el("div", { class: "fighter-row" }, [
+      ...c.conditions.map((id) =>
+        el("button", {
+          class: "cond-chip",
+          title: "Remove condition",
+          text: this.rulesById.get(id)?.title ?? id,
+          onclick: () => this.patchCombatant(c.id, { conditions: c.conditions.filter((x) => x !== id) }),
+        })
+      ),
+      el("select", {
+        class: "text-input",
+        "aria-label": "add condition",
+        onchange: (e: Event) => {
+          const select = e.target as HTMLSelectElement;
+          if (!select.value) return;
+          if (!c.conditions.includes(select.value)) {
+            this.patchCombatant(c.id, { conditions: [...c.conditions, select.value] });
+          }
+          select.value = "";
+        },
+      }, [
+        el("option", { value: "", text: "+ condition" }),
+        ...TRACKED_CONDITIONS.filter((id) => !c.conditions.includes(id)).map((id) =>
+          el("option", { value: id, text: this.rulesById.get(id)?.title ?? id })
+        ),
+      ]),
+    ]);
+    fighter.append(conditions);
+
+    if (c.ruleId) {
+      const rule = this.rulesById.get(c.ruleId);
+      if (rule) {
+        fighter.append(el("div", { class: "fighter-row" }, [
+          el("button", {
+            class: "mini-btn", text: "Stat block",
+            onclick: () => this.open(rule),
+          }),
+          ...(rule.monster?.actions ?? [])
+            .filter((a) => a.value?.startsWith("+"))
+            .slice(0, 3)
+            .map((a) =>
+              el("button", {
+                class: "mini-btn",
+                text: `${a.name} ${a.value}`,
+                onclick: () => this.doRoll(`1d20 ${a.value}`, `${c.name} — ${a.name}`),
+              })
+            ),
+        ]));
+      }
+    }
+
+    return fighter;
   }
 
   // ------------------------------------------------------------ pinned --
@@ -681,7 +1243,7 @@ export class Panel {
           ]));
         }
       } else {
-        rows.push(el("p", { class: "prose", text: rule.body.slice(0, 320) }));
+        rows.push(prose(rule.body.slice(0, 320), (expr) => this.doRoll(expr, rule.title)));
       }
       rows.push(el("button", { class: "back-btn", onclick: () => this.open(rule) }, ["Open full entry"]));
       body.append(el("div", { class: "pin-body" }, rows));
@@ -742,6 +1304,18 @@ export class Panel {
         ]),
         el("div", { class: "set-group" }, [
           el("span", { class: "label", text: "Appearance" }), appearance,
+        ]),
+        el("div", { class: "set-group" }, [
+          el("span", { class: "label", text: "Party" }),
+          el("div", { class: "qa-list" }, [
+            el("button", {
+              class: "qa-btn",
+              onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL("party.html") }),
+            }, [
+              icon("classes", 14),
+              this.party.length ? `Open party (${this.party.length})` : "Create your party",
+            ]),
+          ]),
         ]),
         el("div", { class: "set-group" }, [
           el("span", { class: "label", text: "Behavior" }),

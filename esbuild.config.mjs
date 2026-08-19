@@ -13,6 +13,7 @@ const buildOptions = {
     { in: "src/content/mount.ts", out: "content" },
     { in: "src/options/options.ts", out: "options" },
     { in: "src/sidepanel/sidepanel.ts", out: "sidepanel" },
+    { in: "src/party/party.ts", out: "party" },
   ],
   bundle: true,
   outdir,
@@ -29,6 +30,7 @@ function copyStatic() {
   cpSync("icons", `${outdir}/icons`, { recursive: true });
   cpSync("src/options/options.html", `${outdir}/options.html`);
   cpSync("src/sidepanel/sidepanel.html", `${outdir}/sidepanel.html`);
+  cpSync("src/party/party.html", `${outdir}/party.html`);
   cpSync("src/ui/theme.css", `${outdir}/theme.css`);
   cpSync("src/ui/panel.css", `${outdir}/panel.css`);
   // Data ships as fetchable resources rather than inside the bundles: the
@@ -37,6 +39,7 @@ function copyStatic() {
   mkdirSync(`${outdir}/data`, { recursive: true });
   cpSync("src/data/rules.json", `${outdir}/data/rules.json`);
   cpSync("src/data/aliases.json", `${outdir}/data/aliases.json`);
+  cpSync("src/data/flows.json", `${outdir}/data/flows.json`);
 }
 
 if (watch) {

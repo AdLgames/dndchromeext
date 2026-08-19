@@ -78,6 +78,15 @@ export type FeatureMeta = {
   subclass?: string;
 };
 
+/** A one-tap thing to do from a rule: roll it, or jump somewhere useful. */
+export type QuickAction =
+  | { kind: "roll"; label: string; expr: string }
+  | { kind: "check"; label: string; ability: string }
+  | { kind: "perUnit"; label: string; expr: string; unit: string; unitSize: number }
+  | { kind: "rule"; label: string; ruleId: string }
+  | { kind: "flow"; label: string; flowId: string }
+  | { kind: "note"; label: string; text: string };
+
 export type Rule = {
   id: string; // slug, stable — aliases reference this
   title: string;
@@ -87,10 +96,85 @@ export type Rule = {
   subtitle?: string; // "Medium dragon · chaotic evil"
   badge?: string; // right-aligned result badge: "CR 2", "Lvl 3"
   seeAlso?: string[];
+  /** Plain-English summary, hand-authored — powers "Explain simply". */
+  tldr?: string;
+  example?: string;
+  /** Extra search terms so natural-language questions land here. */
+  keywords?: string[];
+  actions?: QuickAction[];
   monster?: StatBlock;
   spell?: SpellMeta;
   item?: ItemMeta;
   feature?: FeatureMeta;
+};
+
+/** A stepped answer to "what happens if…" — the rules graph, walked. */
+export type FlowStep = {
+  title: string;
+  detail?: string;
+  ruleId?: string;
+  roll?: { label: string; expr: string };
+  perUnit?: { label: string; expr: string; unit: string; unitSize: number };
+  applies?: string[]; // condition rule ids this step imposes
+};
+
+export type Flow = {
+  id: string;
+  title: string;
+  prompt: string; // "I fall off my horse"
+  triggers: string[];
+  steps: FlowStep[];
+};
+
+// ------------------------------------------------------------- party ----
+export type CharacterEntry = {
+  /** Set when the entry came from the SRD dictionary; absent for free text. */
+  ruleId?: string;
+  name: string;
+  note?: string;
+};
+
+export type Character = {
+  id: string;
+  name: string;
+  className: string;
+  level: number;
+  ac: number;
+  hp: number;
+  maxHp: number;
+  speed: number;
+  abilities: AbilityScores;
+  spells: CharacterEntry[];
+  actions: CharacterEntry[];
+  items: CharacterEntry[];
+  notes: string;
+};
+
+// ------------------------------------------------------------ combat ----
+export type Combatant = {
+  id: string;
+  name: string;
+  initiative: number;
+  ac: number;
+  hp: number;
+  maxHp: number;
+  tempHp: number;
+  speed: number;
+  movementUsed: number;
+  conditions: string[]; // condition rule ids
+  concentrating: boolean;
+  concentrationNote: string;
+  reactionUsed: boolean;
+  deathSaves: { successes: number; failures: number };
+  isPlayer: boolean;
+  ruleId?: string; // linked bestiary entry
+  characterId?: string; // linked party member
+};
+
+export type Encounter = {
+  round: number;
+  turn: number;
+  combatants: Combatant[];
 };
 
 export type AliasTable = Record<string, string>; // alias text -> rule id

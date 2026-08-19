@@ -1,9 +1,9 @@
-import type { AliasTable, Rule, RuleGroup } from "./types";
+import type { AliasTable, Flow, Rule, RuleGroup } from "./types";
 
 export type SearchMatch = {
   rule: Rule;
   score: number;
-  via: "alias" | "title" | "fuzzy" | "body";
+  via: "alias" | "title" | "fuzzy" | "body" | "question";
 };
 
 // Ranking tiers, highest first. Each tier occupies its own score band so a
@@ -17,9 +17,48 @@ const SCORE_PREFIX_TITLE = 700;
 const SCORE_FUZZY_ALIAS_MAX = 620;
 const SCORE_FUZZY_TITLE_MAX = 600;
 const SCORE_BODY_MATCH = 200;
+const SCORE_QUESTION_MAX = 660;
 
 const RECENCY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const RECENCY_MAX_MULTIPLIER = 1.25;
+
+/**
+ * Words carrying no topic signal in a rules question. Dropping them lets
+ * "what happens if I'm knocked off my mount" reduce to {knocked, mount},
+ * which is what actually has to match.
+ */
+const STOPWORDS = new Set([
+  "a", "about", "am", "an", "and", "any", "are", "as", "at", "be", "been", "but", "by",
+  "can", "cant", "could", "did", "do", "does", "doing", "dont", "for", "from", "get",
+  "gets", "getting", "had", "has", "have", "how", "i", "if", "im", "in", "into", "is",
+  "it", "its", "just", "me", "much", "my", "of", "off", "on", "or", "our", "out", "over",
+  "should", "so", "some", "than", "that", "the", "their", "them", "then", "there",
+  "these", "they", "this", "to", "up", "use", "using", "was", "we", "were", "what",
+  "when", "where", "which", "while", "who", "why", "will", "with", "would", "you",
+  "your", "does", "happens", "happen", "many", "far", "long", "work", "works",
+]);
+
+/** Light stemmer: enough to tie "falling"/"falls"/"fall" together. */
+function stem(word: string): string {
+  if (word.length > 4 && word.endsWith("ing")) return word.slice(0, -3);
+  if (word.length > 4 && word.endsWith("ies")) return `${word.slice(0, -3)}y`;
+  if (word.length > 3 && word.endsWith("es")) return word.slice(0, -2);
+  if (word.length > 3 && word.endsWith("s")) return word.slice(0, -1);
+  return word;
+}
+
+function contentTokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 1 && !STOPWORDS.has(w))
+    .map(stem);
+}
+
+/** A query is treated as a question once it has several words to weigh. */
+function looksLikeQuestion(query: string): boolean {
+  return query.trim().split(/\s+/).length >= 3;
+}
 
 function normalize(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
@@ -175,10 +214,61 @@ export function search(
     }
   }
 
+  // Natural-language pass: people ask "what happens if I'm knocked off my
+  // mount", not "mounted combat". Score topic-word overlap against the
+  // title, the authored keywords, and (at lower weight) the body.
+  if (looksLikeQuestion(spacedQuery)) {
+    const asked = contentTokens(spacedQuery);
+    if (asked.length) {
+      for (const rule of enabled) {
+        const title = new Set(contentTokens(rule.title));
+        const keys = new Set((rule.keywords ?? []).flatMap((k) => contentTokens(k)));
+        const body = new Set(contentTokens(rule.body.slice(0, 600)));
+
+        let hits = 0;
+        let weight = 0;
+        for (const token of asked) {
+          if (title.has(token)) { hits += 1; weight += 1; }
+          else if (keys.has(token)) { hits += 1; weight += 0.9; }
+          else if (body.has(token)) { hits += 1; weight += 0.35; }
+        }
+        if (hits < Math.min(2, asked.length)) continue;
+
+        const coverage = weight / asked.length;
+        consider(rule, coverage * SCORE_QUESTION_MAX, "question");
+      }
+    }
+  }
+
   return Array.from(best.values())
     .map((match) => ({ ...match, score: match.score * recencyMultiplier(match.rule.id, recency, now) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
+}
+
+/** Ranks decision flows against the query, using the same token overlap. */
+export function searchFlows(rawQuery: string, flows: Flow[], limit = 3): Flow[] {
+  const query = normalize(rawQuery);
+  if (query.length < 3) return [];
+  const asked = contentTokens(query);
+  if (!asked.length) return [];
+
+  const scored = flows.map((flow) => {
+    const haystack = new Set([
+      ...contentTokens(flow.title),
+      ...contentTokens(flow.prompt),
+      ...flow.triggers.flatMap((t) => contentTokens(t)),
+    ]);
+    const exact = flow.triggers.some((t) => normalize(t) === query) ? 1 : 0;
+    const overlap = asked.filter((t) => haystack.has(t)).length / asked.length;
+    return { flow, score: exact + overlap };
+  });
+
+  return scored
+    .filter((s) => s.score >= 0.5)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((s) => s.flow);
 }
 
 const RECENCY_STORAGE_KEY = "rulesOverlay:recency";

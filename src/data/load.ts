@@ -1,6 +1,6 @@
-import type { AliasTable, Rule } from "../types";
+import type { AliasTable, Flow, Rule } from "../types";
 
-export type Dataset = { rules: Rule[]; aliases: AliasTable };
+export type Dataset = { rules: Rule[]; aliases: AliasTable; flows: Flow[] };
 
 let pending: Promise<Dataset> | null = null;
 
@@ -12,10 +12,14 @@ let pending: Promise<Dataset> | null = null;
  */
 export function loadDataset(): Promise<Dataset> {
   if (!pending) {
+    const read = <T>(file: string) =>
+      fetch(chrome.runtime.getURL(`data/${file}`)).then((r) => r.json() as Promise<T>);
+
     pending = Promise.all([
-      fetch(chrome.runtime.getURL("data/rules.json")).then((r) => r.json() as Promise<Rule[]>),
-      fetch(chrome.runtime.getURL("data/aliases.json")).then((r) => r.json() as Promise<AliasTable>),
-    ]).then(([rules, aliases]) => ({ rules, aliases }));
+      read<Rule[]>("rules.json"),
+      read<AliasTable>("aliases.json"),
+      read<Flow[]>("flows.json"),
+    ]).then(([rules, aliases, flows]) => ({ rules, aliases, flows }));
   }
   return pending;
 }

@@ -1,3 +1,5 @@
+import { DICE_RE } from "../dice";
+
 type Props = Record<string, string | number | boolean | ((e: Event) => void) | undefined>;
 
 /** Terse element builder. Text goes through textContent — never innerHTML. */
@@ -38,6 +40,12 @@ export const ICONS = {
   rules: ["M4 5h16v14H4zM8 5v14M4 9h4M4 13h4"],
   items: ["M6 3h12l2 5-8 13L4 8Z", "M4 8h16"],
   classes: ["M16 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z", "M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"],
+  dice: ["M12 2.5 21 7.5v9L12 21.5 3 16.5v-9Z", "M12 2.5v19M3 7.5l9 5 9-5"],
+  swords: ["M4 4h4l11 11v5h-5L3 9V4Z", "m14 14 6 6M5 19l4-4"],
+  flow: ["M6 4v4a3 3 0 0 0 3 3h6a3 3 0 0 1 3 3v6", "M4 4h4M16 17h4M4 20h4"],
+  plus: ["M12 5v14M5 12h14"],
+  minus: ["M5 12h14"],
+  trash: ["M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"],
 } as const;
 
 export function icon(name: keyof typeof ICONS, size = 16, strokeWidth = 1.5): SVGElement {
@@ -57,6 +65,30 @@ export function icon(name: keyof typeof ICONS, size = 16, strokeWidth = 1.5): SV
     svg.append(path);
   }
   return svg;
+}
+
+/**
+ * Renders prose with every dice expression turned into a clickable chip,
+ * so "7 (1d10 + 2) piercing damage" becomes rollable in place.
+ */
+export function prose(text: string, onRoll: (expr: string) => void): HTMLElement {
+  const p = el("p", { class: "prose" });
+  let last = 0;
+  DICE_RE.lastIndex = 0;
+
+  for (let m = DICE_RE.exec(text); m; m = DICE_RE.exec(text)) {
+    const expr = m[0].trim();
+    if (m.index > last) p.append(text.slice(last, m.index));
+    p.append(el("button", {
+      class: "dice",
+      title: `Roll ${expr}`,
+      onclick: (e: Event) => { e.stopPropagation(); onRoll(expr); },
+      text: expr,
+    }));
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) p.append(text.slice(last));
+  return p;
 }
 
 /** Renders `text` with the [start,end) range wrapped in a highlight span. */
