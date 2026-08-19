@@ -165,11 +165,27 @@ export type Character = {
 };
 
 // ------------------------------------------------------------ combat ----
-export type Attack = {
+export type ActionCost = "action" | "bonus" | "reaction" | "free";
+
+/**
+ * Something a combatant can do on their turn. Covers both shapes 5e uses:
+ * an attack roll against AC, or a saving throw against a DC.
+ */
+export type CombatAction = {
+  id: string;
   name: string;
-  bonus: number;
-  damage: string; // dice expression, e.g. "1d6 + 2"
-  note?: string; // "Recharge 5-6", "DC 11 Dex half"
+  kind: "weapon" | "spell" | "item" | "other";
+  cost: ActionCost;
+  bonus?: number; // attack bonus, when this is an attack roll
+  damage?: string; // dice expression, e.g. "1d6 + 2"
+  damageType?: string;
+  saveDC?: number; // set instead of `bonus` for save-based effects
+  saveAbility?: keyof AbilityScores;
+  /** What a successful save does — halve the damage, or avoid it entirely. */
+  saveEffect?: "half" | "none";
+  melee?: boolean;
+  ruleId?: string; // the spell/weapon entry this came from
+  note?: string;
 };
 
 export type Combatant = {
@@ -190,9 +206,16 @@ export type Combatant = {
   isPlayer: boolean;
   ruleId?: string; // linked bestiary entry
   characterId?: string; // linked party member
-  attacks: Attack[];
+  actions: CombatAction[];
   abilities: AbilityScores;
   saveBonuses: Partial<Record<keyof AbilityScores, number>>;
+  level?: number;
+  profBonus: number;
+  /** Ability a caster's spell attacks and save DCs run off. */
+  spellAbility?: keyof AbilityScores;
+  /** Action economy for the current turn; reset when the turn comes round. */
+  actionUsed: boolean;
+  bonusUsed: boolean;
 };
 
 /** One resolved thing that happened, kept so the table can see the maths. */
@@ -208,6 +231,15 @@ export type Encounter = {
   turn: number;
   combatants: Combatant[];
   log: CombatEvent[];
+  /**
+   * Turn order, fixed when initiative is rolled. Stored rather than derived
+   * so editing someone's initiative mid-fight doesn't silently reshuffle
+   * whose turn it is.
+   */
+  order: string[];
+  started: boolean;
+  /** Lets the DM act out of turn when the table needs it. */
+  dmOverride: boolean;
 };
 
 export type AliasTable = Record<string, string>; // alias text -> rule id

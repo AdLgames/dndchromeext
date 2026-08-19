@@ -1,7 +1,8 @@
 import {
-  abilityMod, advance, applyDamage, applyHealing, combatantBlank,
-  combatantFromCharacter, combatantFromMonster, EMPTY_ENCOUNTER, getEncounter, logEvent,
-  onEncounterChanged, ordered, resolveAttack, rollSave, saveEncounter, TRACKED_CONDITIONS,
+  abilityMod, activeCombatant, advance, applyDamage, applyHealing, canAct, combatantBlank,
+  combatantFromCharacter, combatantFromMonster, effectiveSpeed, EMPTY_ENCOUNTER, getEncounter,
+  logEvent, onEncounterChanged, ordered, resolveAction, rollInitiativeForAll, rollSave,
+  saveEncounter, TRACKED_CONDITIONS,
 } from "../combat";
 import { loadDataset } from "../data/load";
 import { clearRollLog, formatRoll, getRollLog, pushRoll, roll, rollRepeated, type RollDetail } from "../dice";
@@ -19,7 +20,7 @@ import {
 } from "../settings";
 import {
   GROUP_LABELS, RULE_GROUPS,
-  type AbilityScores, type Attack, type Character, type Combatant, type Encounter, type Flow,
+  type AbilityScores, type Character, type Combatant, type CombatAction, type Encounter, type Flow,
   type NamedEntry, type QuickAction, type Rule, type RuleGroup, type SourceRecord,
 } from "../types";
 import { el, highlighted, icon, prose } from "./dom";
@@ -1275,14 +1276,45 @@ export class Panel {
   private renderCombat(): HTMLElement {
     const body = el("div", { class: "body" });
     const list = ordered(this.encounter);
-    const active = list[this.encounter.turn];
+    const active = activeCombatant(this.encounter);
+    const started = this.encounter.started;
 
     body.append(el("div", { class: "combat-bar" }, [
-      el("span", { class: "combat-round", text: `Round ${this.encounter.round}` }),
+      el("span", {
+        class: "combat-round",
+        text: started ? `Round ${this.encounter.round}` : "Not started",
+      }),
       el("span", { class: "spacer" }),
-      el("button", { text: "Prev", onclick: () => void this.updateEncounter(advance(this.encounter, -1)) }),
-      el("button", { text: "Next turn", onclick: () => void this.updateEncounter(advance(this.encounter, 1)) }),
+      started ? el("button", {
+        text: "Prev", onclick: () => void this.updateEncounter(advance(this.encounter, -1)),
+      }) : null,
+      started ? el("button", {
+        text: "End turn", onclick: () => void this.updateEncounter(advance(this.encounter, 1)),
+      }) : null,
     ]));
+
+    if (started && active) {
+      const speed = effectiveSpeed(active);
+      const blocked = !canAct(active);
+      body.append(el("div", { class: `turn-banner${blocked ? " blocked" : ""}` }, [
+        el("span", { class: "turn-name", text: `${active.name}'s turn` }),
+        el("div", { class: "turn-pips" }, [
+          el("span", { class: `pip-tag${active.actionUsed ? " used" : ""}`, text: "Action" }),
+          el("span", { class: `pip-tag${active.bonusUsed ? " used" : ""}`, text: "Bonus" }),
+          el("span", { class: `pip-tag${active.reactionUsed ? " used" : ""}`, text: "Reaction" }),
+          el("span", {
+            class: `pip-tag${speed === 0 ? " used" : ""}`,
+            text: `${Math.max(0, speed - active.movementUsed)} ft`,
+          }),
+        ]),
+        blocked
+          ? el("span", {
+              class: "turn-note",
+              text: `Can't act — ${active.hp <= 0 ? "at 0 HP" : active.conditions.join(", ")}`,
+            })
+          : null,
+      ]));
+    }
 
     body.append(el("div", { class: "qa" }, [
       el("div", { class: "qa-list" }, [
@@ -1292,8 +1324,20 @@ export class Panel {
         }, [icon("plus", 14), "Add combatant"]),
         el("button", {
           class: "qa-btn",
-          onclick: () => this.doRoll("1d20", "Initiative"),
-        }, [icon("dice", 14), "Roll initiative"]),
+          onclick: () => {
+            if (!this.encounter.combatants.length) return;
+            const { encounter, rolls } = rollInitiativeForAll(this.encounter);
+            this.lastRoll = rolls[0] ?? this.lastRoll;
+            void this.updateEncounter(encounter);
+          },
+        }, [icon("dice", 14), started ? "Reroll initiative" : "Roll initiative for all"]),
+        el("button", {
+          class: `qa-btn${this.encounter.dmOverride ? " on" : ""}`,
+          title: "Let anyone act, regardless of whose turn it is",
+          onclick: () => void this.updateEncounter({
+            ...this.encounter, dmOverride: !this.encounter.dmOverride,
+          }),
+        }, [icon("settings", 14), this.encounter.dmOverride ? "Turn order off" : "Turn order on"]),
         el("button", {
           class: "qa-btn",
           onclick: () => void this.updateEncounter(EMPTY_ENCOUNTER),
@@ -1311,9 +1355,9 @@ export class Panel {
       return body;
     }
 
-    for (const c of list) {
-      body.append(this.renderCombatant(c, active?.id === c.id));
-    }
+    list.forEach((c, index) => {
+      body.append(this.renderCombatant(c, started ? index === this.encounter.turn : false, index));
+    });
 
     if (this.encounter.log.length) {
       body.append(el("div", { class: "group-head" }, [
@@ -1337,7 +1381,7 @@ export class Panel {
       rows.push(el("button", {
         class: "qa-btn",
         onclick: () => {
-          const combatant = combatantFromCharacter(character);
+          const combatant = combatantFromCharacter(character, this.rulesById);
           combatant.initiative = roll("1d20").total + Math.floor((character.abilities.dex - 10) / 2);
           this.combatPicker = false;
           void this.updateEncounter({
@@ -1345,7 +1389,10 @@ export class Panel {
             combatants: [...this.encounter.combatants, combatant],
           });
         },
-      }, [icon("classes", 14), character.name]));
+      }, [
+        icon("classes", 14),
+        `${character.name}${character.className ? ` · ${character.className} ${character.level}` : ""}`,
+      ]));
     }
 
     rows.push(el("button", {
@@ -1364,27 +1411,49 @@ export class Panel {
     return el("div", { class: "qa" }, [
       el("span", {
         class: "label",
-        text: this.party.length ? "Add from your party" : "No party saved yet — open the party page from settings",
+        text: this.party.length
+          ? "Add from your party — their weapons, spells and items come with them"
+          : "No party saved yet — create one from settings",
       }),
       el("div", { class: "qa-list" }, rows),
     ]);
   }
 
-  private async applyAttack(attacker: Combatant, attack: Attack, target: Combatant) {
-    const result = resolveAttack(attacker, attack, target, this.attackMode);
-    this.lastRoll = result.attackRoll;
-    void pushRoll(result.attackRoll);
+  /** Resolves one action against one target and writes the consequences. */
+  private async useAction(attacker: Combatant, action: CombatAction, target: Combatant) {
+    const result = resolveAction(attacker, action, target, this.attackMode);
+    const primary = result.attackRoll ?? result.save?.roll ?? result.damage;
+    if (primary) { this.lastRoll = primary; void pushRoll(primary); }
 
-    const verdict = result.crit ? "CRIT" : result.fumble ? "natural 1" : result.hit ? "hit" : "miss";
+    let headline: string;
+    if (result.save) {
+      const { dc, ability, roll: saveRoll, passed } = result.save;
+      headline =
+        `${attacker.name} → ${target.name}: ${action.name} — DC ${dc} ${ability.toUpperCase()} save ` +
+        `${saveRoll.total} (${passed ? "saved" : "failed"})`;
+    } else if (result.attackRoll) {
+      const verdict = result.crit ? "CRIT" : result.fumble ? "natural 1" : result.hit ? "hit" : "miss";
+      headline =
+        `${attacker.name} → ${target.name}: ${action.name} ${result.attackRoll.total} ` +
+        `vs AC ${target.ac} — ${verdict}`;
+    } else {
+      headline = `${attacker.name} → ${target.name}: ${action.name}`;
+    }
+
+    const detailBits: string[] = [];
+    if (result.damage) {
+      detailBits.push(`${result.damageTotal} ${action.damageType ?? ""} damage`.replace("  ", " ").trim());
+      detailBits.push(`(${result.damage.expr} ${formatRoll(result.damage)})`);
+    }
+    if (result.shape.reasons.length) detailBits.push(`— ${result.shape.reasons.join(", ")}`);
+
     let encounter = logEvent(this.encounter, {
       kind: "attack",
-      text: `${attacker.name} → ${target.name}: ${attack.name} ${result.total} vs AC ${target.ac} — ${verdict}`,
-      detail: result.hit && result.damage
-        ? `${result.damageTotal} damage (${result.damage.expr} ${formatRoll(result.damage)})`
-        : undefined,
+      text: headline,
+      detail: detailBits.join(" ") || undefined,
     });
 
-    if (result.hit && result.damageTotal > 0) {
+    if (result.damageTotal > 0) {
       encounter = {
         ...encounter,
         combatants: encounter.combatants.map((x) =>
@@ -1410,8 +1479,28 @@ export class Panel {
 
       const after = encounter.combatants.find((x) => x.id === target.id);
       if (after && after.hp === 0) {
-        encounter = logEvent(encounter, { kind: "note", text: `${target.name} drops to 0 HP` });
+        encounter = logEvent(encounter, {
+          kind: "note",
+          text: `${target.name} drops to 0 HP — unconscious and prone`,
+        });
       }
+    }
+
+    // Spend the action economy this cost, unless turn order is off.
+    if (this.encounter.started && !this.encounter.dmOverride) {
+      encounter = {
+        ...encounter,
+        combatants: encounter.combatants.map((x) =>
+          x.id === attacker.id
+            ? {
+                ...x,
+                actionUsed: action.cost === "action" ? true : x.actionUsed,
+                bonusUsed: action.cost === "bonus" ? true : x.bonusUsed,
+                reactionUsed: action.cost === "reaction" ? true : x.reactionUsed,
+              }
+            : x
+        ),
+      };
     }
 
     this.attackFrom = null;
@@ -1455,8 +1544,16 @@ export class Panel {
     await this.updateEncounter(encounter);
   }
 
-  private renderAttackPanel(attacker: Combatant): HTMLElement {
+  private costLabel(action: CombatAction): string {
+    if (action.cost === "bonus") return "Bonus";
+    if (action.cost === "reaction") return "Reaction";
+    if (action.cost === "free") return "Free";
+    return "Action";
+  }
+
+  private renderActionPanel(attacker: Combatant): HTMLElement {
     const targets = ordered(this.encounter).filter((t) => t.id !== attacker.id);
+    const gated = this.encounter.started && !this.encounter.dmOverride;
 
     const modeBtn = (mode: "normal" | "adv" | "dis", label: string) =>
       el("button", {
@@ -1476,49 +1573,87 @@ export class Panel {
       ]),
     ];
 
-    if (!attacker.attacks.length) {
+    if (!attacker.actions.length) {
       rows.push(el("div", { class: "fighter-row" }, [
-        el("span", { class: "roll-detail", text: "No attacks yet — add one below." }),
+        el("span", {
+          class: "roll-detail",
+          text: attacker.isPlayer
+            ? "No weapons or spells on this character yet — add them on the party page."
+            : "No actions yet — add one below.",
+        }),
       ]));
     }
 
-    for (const attack of attacker.attacks) {
-      rows.push(el("div", { class: "attack-line" }, [
-        el("span", { class: "attack-name", text: attack.name }),
-        el("span", { class: "roll-detail", text: `${attack.bonus >= 0 ? "+" : ""}${attack.bonus} · ${attack.damage}` }),
-        el("div", { class: "target-list" }, targets.length
-          ? targets.map((t) =>
-              el("button", {
-                class: "mini-btn",
-                title: `Attack ${t.name} (AC ${t.ac})`,
-                text: `▸ ${t.name}`,
-                onclick: () => void this.applyAttack(attacker, attack, t),
+    for (const action of attacker.actions) {
+      const spent =
+        gated &&
+        ((action.cost === "action" && attacker.actionUsed) ||
+          (action.cost === "bonus" && attacker.bonusUsed) ||
+          (action.cost === "reaction" && attacker.reactionUsed));
+
+      const numbers = [
+        action.bonus !== undefined ? `${action.bonus >= 0 ? "+" : ""}${action.bonus} to hit` : null,
+        action.saveDC !== undefined
+          ? `DC ${action.saveDC} ${action.saveAbility?.toUpperCase() ?? ""}`
+          : null,
+        action.damage ?? null,
+        action.damageType ?? null,
+      ].filter(Boolean).join(" · ");
+
+      const rule = action.ruleId ? this.rulesById.get(action.ruleId) : undefined;
+
+      rows.push(el("div", { class: `attack-line${spent ? " spent" : ""}` }, [
+        el("div", { class: "attack-head" }, [
+          el("span", { class: "attack-name", text: action.name }),
+          el("span", { class: "cost-tag", text: this.costLabel(action) }),
+          rule
+            ? el("button", {
+                class: "mini-btn", text: "Rule",
+                onclick: () => { this.tab = "search"; this.open(rule); },
               })
-            )
-          : [el("span", { class: "roll-detail", text: "No other combatants to target." })]),
+            : null,
+        ]),
+        numbers ? el("span", { class: "roll-detail", text: numbers }) : null,
+        spent
+          ? el("span", { class: "roll-detail", text: `${this.costLabel(action)} already used this turn` })
+          : el("div", { class: "target-list" }, targets.length
+              ? targets.map((t) =>
+                  el("button", {
+                    class: "mini-btn",
+                    title: `${action.name} against ${t.name} (AC ${t.ac})`,
+                    text: `▸ ${t.name}`,
+                    onclick: () => void this.useAction(attacker, action, t),
+                  })
+                )
+              : [el("span", { class: "roll-detail", text: "No other combatants to target." })]),
       ]));
     }
 
     rows.push(el("div", { class: "fighter-row" }, [
       el("button", {
-        class: "mini-btn", text: "+ Add attack",
+        class: "mini-btn", text: "+ Add action",
         onclick: () => {
-          const name = prompt("Attack name (e.g. Longsword)");
+          const name = prompt("Action name (e.g. Longsword)");
           if (!name) return;
-          const bonus = parseInt(prompt("Attack bonus, e.g. 5", "0") ?? "0", 10) || 0;
+          const bonus = parseInt(prompt("Attack bonus, e.g. 5 (blank for a save)", "0") ?? "0", 10);
           const damage = prompt("Damage dice, e.g. 1d8 + 3", "1d6") ?? "1d6";
           this.patchCombatant(attacker.id, {
-            attacks: [...attacker.attacks, { name, bonus, damage }],
+            actions: [...attacker.actions, {
+              id: `a${Date.now().toString(36)}`,
+              name, kind: "other", cost: "action",
+              bonus: Number.isFinite(bonus) ? bonus : 0,
+              damage, melee: true,
+            }],
           });
         },
       }),
-      ...attacker.attacks.map((attack, i) =>
+      ...attacker.actions.map((action, i) =>
         el("button", {
           class: "mini-btn danger",
-          title: `Remove ${attack.name}`,
-          text: `− ${attack.name}`,
+          title: `Remove ${action.name}`,
+          text: `− ${action.name}`,
           onclick: () => this.patchCombatant(attacker.id, {
-            attacks: attacker.attacks.filter((_, j) => j !== i),
+            actions: attacker.actions.filter((_, j) => j !== i),
           }),
         })
       ),
@@ -1527,8 +1662,11 @@ export class Panel {
     return el("div", { class: "attack-panel" }, rows);
   }
 
-  private renderCombatant(c: Combatant, isActive: boolean): HTMLElement {
+  private renderCombatant(c: Combatant, isActive: boolean, index: number): HTMLElement {
     const down = c.hp <= 0;
+    const gated = this.encounter.started && !this.encounter.dmOverride;
+    const canUse = !gated || isActive;
+    const blocked = !canAct(c);
 
     const number = (value: number, onChange: (next: number) => void, label: string) =>
       el("input", {
@@ -1537,6 +1675,9 @@ export class Panel {
       });
 
     const head = el("div", { class: "fighter-head" }, [
+      this.encounter.started
+        ? el("span", { class: "turn-index", text: String(index + 1) })
+        : null,
       el("span", { class: "fighter-init", text: String(c.initiative) }),
       el("span", { class: "fighter-name", text: c.name }),
       c.isPlayer ? el("span", { class: "fighter-tag", text: "PC" }) : null,
@@ -1546,6 +1687,7 @@ export class Panel {
         onclick: () => void this.updateEncounter({
           ...this.encounter,
           combatants: this.encounter.combatants.filter((x) => x.id !== c.id),
+          order: this.encounter.order.filter((oid) => oid !== c.id),
         }),
       }, [icon("close", 13)]),
     ]);
@@ -1561,8 +1703,6 @@ export class Panel {
       number(c.initiative, (initiative) => this.patchCombatant(c.id, { initiative }), "initiative"),
     ]);
 
-    // Damage / heal by an explicit amount, which is how most table maths
-    // actually arrives — someone else rolled it.
     const deltaInput = el("input", {
       class: "num-input", type: "number", min: "0",
       placeholder: "0", "aria-label": `amount for ${c.name}`,
@@ -1592,8 +1732,13 @@ export class Panel {
         },
       }),
       el("button", {
-        class: "mini-btn", text: "Attack",
+        class: `mini-btn${canUse && !blocked ? " on" : ""}`,
+        text: `Actions${c.actions.length ? ` (${c.actions.length})` : ""}`,
         style: "margin-left:auto",
+        title: blocked
+          ? "This combatant can't act right now"
+          : canUse ? "Use a weapon, spell or item" : "Not their turn — enable “Turn order off” to act anyway",
+        disabled: !canUse || blocked,
         onclick: () => {
           this.attackFrom = this.attackFrom === c.id ? null : c.id;
           this.render();
@@ -1601,7 +1746,8 @@ export class Panel {
       }),
     ]);
 
-    const movementLeft = Math.max(0, c.speed - c.movementUsed);
+    const speed = effectiveSpeed(c);
+    const movementLeft = Math.max(0, speed - c.movementUsed);
     const statuses = el("div", { class: "fighter-row" }, [
       el("button", {
         class: `mini-btn${c.reactionUsed ? "" : " on"}`,
@@ -1610,10 +1756,12 @@ export class Panel {
         onclick: () => this.patchCombatant(c.id, { reactionUsed: !c.reactionUsed }),
       }),
       el("span", { class: "stat-k", text: "Move" }),
-      el("span", { text: `${movementLeft} / ${c.speed} ft` }),
+      el("span", {
+        text: speed === 0 ? "0 ft (speed 0)" : `${movementLeft} / ${speed} ft`,
+      }),
       el("button", {
         class: "mini-btn", text: "−5",
-        onclick: () => this.patchCombatant(c.id, { movementUsed: Math.min(c.speed, c.movementUsed + 5) }),
+        onclick: () => this.patchCombatant(c.id, { movementUsed: Math.min(speed, c.movementUsed + 5) }),
       }),
       el("button", {
         class: "mini-btn", text: "Reset",
@@ -1662,22 +1810,18 @@ export class Panel {
       class: `fighter${isActive ? " active" : ""}${down ? " down" : ""}`,
     }, [head, vitals, hpControls, statuses, saves, conc]);
 
-    if (this.attackFrom === c.id) fighter.append(this.renderAttackPanel(c));
-
-    if (down && !c.isPlayer) {
-      fighter.append(el("div", { class: "fighter-row" }, [el("span", { class: "fighter-tag", text: "Down" })]));
-    }
+    if (this.attackFrom === c.id) fighter.append(this.renderActionPanel(c));
 
     if (down && c.isPlayer) {
-      const pip = (kind: "succ" | "fail", index: number, filled: boolean) =>
+      const pip = (kind: "succ" | "fail", pipIndex: number, filled: boolean) =>
         el("button", {
           class: `pip ${kind}${filled ? " on" : ""}`,
-          "aria-label": `${kind} ${index + 1}`,
+          "aria-label": `${kind} ${pipIndex + 1}`,
           onclick: () => {
             const key = kind === "succ" ? "successes" : "failures";
             const current = c.deathSaves[key];
             this.patchCombatant(c.id, {
-              deathSaves: { ...c.deathSaves, [key]: current === index + 1 ? index : index + 1 },
+              deathSaves: { ...c.deathSaves, [key]: current === pipIndex + 1 ? pipIndex : pipIndex + 1 },
             });
           },
         });
@@ -1701,7 +1845,12 @@ export class Panel {
               void this.updateEncounter(logEvent({
                 ...this.encounter,
                 combatants: this.encounter.combatants.map((x) =>
-                  x.id === c.id ? { ...x, hp: 1, deathSaves: { successes: 0, failures: 0 } } : x
+                  x.id === c.id
+                    ? {
+                        ...x, hp: 1, deathSaves: { successes: 0, failures: 0 },
+                        conditions: x.conditions.filter((cond) => cond !== "unconscious"),
+                      }
+                    : x
                 ),
               }, { kind: "save", text: `${c.name} death save: natural 20 — back up at 1 HP` }));
               return;
@@ -1724,12 +1873,12 @@ export class Panel {
     }
 
     const conditions = el("div", { class: "fighter-row" }, [
-      ...c.conditions.map((id) =>
+      ...c.conditions.map((cid) =>
         el("button", {
           class: "cond-chip",
           title: "Remove condition",
-          text: this.rulesById.get(id)?.title ?? id,
-          onclick: () => this.patchCombatant(c.id, { conditions: c.conditions.filter((x) => x !== id) }),
+          text: this.rulesById.get(cid)?.title ?? cid,
+          onclick: () => this.patchCombatant(c.id, { conditions: c.conditions.filter((x) => x !== cid) }),
         })
       ),
       el("select", {
@@ -1745,8 +1894,8 @@ export class Panel {
         },
       }, [
         el("option", { value: "", text: "+ condition" }),
-        ...TRACKED_CONDITIONS.filter((id) => !c.conditions.includes(id)).map((id) =>
-          el("option", { value: id, text: this.rulesById.get(id)?.title ?? id })
+        ...TRACKED_CONDITIONS.filter((cid) => !c.conditions.includes(cid)).map((cid) =>
+          el("option", { value: cid, text: this.rulesById.get(cid)?.title ?? cid })
         ),
       ]),
     ]);
@@ -1766,6 +1915,7 @@ export class Panel {
 
     return fighter;
   }
+
   // ------------------------------------------------------------ pinned --
   private renderPinned(): HTMLElement {
     const body = el("div", { class: "body" });

@@ -38,8 +38,8 @@ unpacked** → select the `dist/` folder.
 
 ### Browsing and filtering
 
-Tapping a category on the home screen opens its **full catalogue** — all 694
-monsters, all 690 spells — rather than a capped search. Each catalogue
+Tapping a category on the home screen opens its **full catalogue** — all 405
+monsters, all 377 spells — rather than a capped search. Each catalogue
 filters on the stats that matter for it:
 
 - **Bestiary**: CR, AC and HP ranges, creature type; sort by CR, AC or HP.
@@ -75,16 +75,39 @@ ordinary text.
   goblin can menace a level-8 party. Adding a scaled monster to combat
   carries the adjusted numbers over. This is explicitly homebrew — the SRD
   has no official scaling rules — and the panel says so.
-- **Combat tracker** (its own tab) resolves attacks properly: pick an
-  attacker, pick one of its attacks, pick a target, and it rolls d20 + bonus
-  against that target's AC (with advantage/disadvantage), doubles the dice on
-  a natural 20, rolls damage, takes it off temporary hit points first, and —
-  if the target was concentrating — immediately rolls the Constitution save
-  at DC 10 or half the damage, dropping the spell on a failure. Damage and
-  healing can also be applied by hand, every save is one tap, death saves
-  roll and tally themselves, and a combat log records the arithmetic so the
-  table can check it. Monsters arrive with their attacks already extracted
-  from the stat block; players get attacks you add once.
+- **Combat tracker** (its own tab) runs a turn-based fight:
+
+  1. **Roll initiative for all** rolls d20 + Dex for everyone at once and
+     freezes the turn order (stored, so editing a number later doesn't
+     silently reshuffle whose turn it is).
+  2. Only the combatant whose turn it is can act. Their action, bonus
+     action, reaction and remaining movement show in the turn banner and are
+     spent as they're used, refreshing when their turn comes round again.
+     *Turn order off* lets the DM act out of sequence when the table needs it.
+  3. Pick one of that combatant's **weapons, spells or items** — party
+     members bring theirs straight off their character sheet — then pick a
+     target. Attack rolls go against the target's AC; save-based effects
+     make the target roll against the DC, halving or avoiding the damage.
+  4. Damage lands on the target, coming off temporary hit points first, and
+     is stored. Dropping to 0 applies unconscious and prone automatically.
+
+  **Conditions actually change the maths.** Attacking a prone target is
+  advantage in melee and disadvantage at range; blinded, frightened,
+  poisoned or restrained attackers roll at disadvantage; a hit on a
+  paralysed or unconscious target in melee is an automatic critical;
+  grappled, restrained, paralysed or stunned drops speed to 0; and
+  incapacitating conditions stop that combatant acting at all. Every roll
+  says which conditions shaped it. Advantage and disadvantage cancel per
+  5e's rule, however many of each apply.
+
+  Damage taken while concentrating immediately rolls the Constitution save
+  at DC 10 or half the damage. Death saves roll and tally themselves. A
+  combat log records the arithmetic so the table can check it.
+
+  Numbers for party members are derived the way 5e does — ability modifier
+  plus proficiency for the level, with a weapon's finesse/ranged properties
+  choosing the ability and a caster's class choosing their spell ability —
+  and every one of them stays editable.
 - **Party roster** (a full tab, linked from settings): characters with
   stats, plus spells/actions/items picked from the SRD **or typed in as free
   text** for homebrew. Everything autosaves as you type — there is no save
@@ -129,7 +152,7 @@ src/
   settings.ts             # sources / appearance / behavior, persisted locally
   pins.ts                  # pinned entry ids
   party.ts                  # party roster storage, export/import
-  combat.ts                  # encounter state, initiative, attack resolution, damage
+  combat.ts                  # turn order, action economy, condition effects, resolution
   types.ts                    # Rule, StatBlock, Flow, Character, Combatant
   ui/
     panel.ts                # the whole panel: browse, results, detail, pins, settings
