@@ -5,10 +5,12 @@ import {
 import { loadDataset } from "../data/load";
 import { clearRollLog, formatRoll, getRollLog, pushRoll, roll, rollRepeated, type RollDetail } from "../dice";
 import { getParty } from "../party";
+import { scaleStatBlock } from "../scale";
 import { clearPins, getPins, onPinsChanged, togglePin } from "../pins";
 import {
-  buildAliasIndex, findHighlight, getRecency, recordMiss, recordView, search, searchFlows,
-  type SearchMatch,
+  buildAliasIndex, crValue, findHighlight, getRecency, isFilterActive, matchesFilter,
+  recordMiss, recordView, search, searchFlows,
+  type SearchMatch, type StatFilter,
 } from "../search";
 import {
   DEFAULT_SETTINGS, getSettings, onSettingsChanged, resolveTheme, saveSettings,
@@ -30,7 +32,12 @@ const GROUP_ICONS: Record<RuleGroup, "bestiary" | "spells" | "rules" | "items" |
 
 const ABILITY_KEYS: (keyof AbilityScores)[] = ["str", "dex", "con", "int", "wis", "cha"];
 
-type View = "browse" | "results" | "detail" | "pinned" | "settings" | "flow" | "combat";
+type View = "browse" | "results" | "detail" | "pinned" | "settings" | "flow" | "catalog";
+type Tab = "search" | "combat";
+
+type SortKey = "name" | "cr" | "ac" | "hp" | "level";
+
+const CATALOG_PAGE = 80;
 
 export type PanelOptions = {
   /** Shown as a close button in the header; omitted in the side panel. */
@@ -66,7 +73,13 @@ export class Panel {
     bestiary: 0, spells: 0, rules: 0, items: 0, classes: 0,
   };
 
+  private tab: Tab = "search";
   private view: View = "browse";
+  private catalogGroup: RuleGroup = "bestiary";
+  private catalogFilter: StatFilter = {};
+  private catalogSort: SortKey = "name";
+  private catalogShown = CATALOG_PAGE;
+  private scaleDelta = 0;
   private query = "";
   private matches: SearchMatch[] = [];
   private selected = 0;
@@ -212,6 +225,7 @@ export class Panel {
 
   private open(rule: Rule, pushHistory = true) {
     if (pushHistory && this.detail) this.history.push(this.detail.id);
+    if (rule.id !== this.detail?.id) this.scaleDelta = 0;
     this.detail = rule;
     this.view = "detail";
     this.explain = false;
@@ -305,7 +319,8 @@ export class Panel {
   handleKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.preventDefault();
-      if (this.view !== "browse" && this.view !== "results") this.back();
+      if (this.tab === "combat") { this.tab = "search"; this.render(); this.focus(); }
+      else if (this.view !== "browse" && this.view !== "results") this.back();
       else if (this.query) { this.query = ""; this.runSearch(); this.focus(); }
       else this.opts.onClose?.();
       return;
@@ -346,6 +361,17 @@ export class Panel {
     const panel = el("div", { class: "panel" });
     this.input = null; // detached by the rebuild; renderSearch re-assigns it
 
+    if (this.tab === "combat") {
+      panel.append(this.renderHeader(), this.renderTabs(), this.renderCombat());
+      panel.append(this.rollStrip() ?? this.footer());
+      return panel;
+    }
+
+    if (this.view === "catalog") {
+      panel.append(this.renderSubHeader(GROUP_LABELS[this.catalogGroup]), this.renderCatalog());
+      return panel;
+    }
+
     if (this.view === "detail" && this.detail) {
       panel.append(this.renderDetailHeader(), this.renderDetailBody(this.detail));
       panel.append(this.rollStrip() ?? this.footer());
@@ -356,15 +382,33 @@ export class Panel {
     } else if (this.view === "flow" && this.flow) {
       panel.append(this.renderSubHeader("Walkthrough"), this.renderFlow(this.flow));
       panel.append(this.rollStrip() ?? this.footer());
-    } else if (this.view === "combat") {
-      panel.append(this.renderSubHeader("Combat"), this.renderCombat());
-      panel.append(this.rollStrip() ?? this.footer());
     } else {
-      panel.append(this.renderHeader(), this.renderSearch());
+      panel.append(this.renderHeader(), this.renderTabs(), this.renderSearch());
       panel.append(this.view === "results" ? this.renderResults() : this.renderBrowse());
       panel.append(this.view === "results" ? this.renderKeys() : this.footer());
     }
     return panel;
+  }
+
+  private renderTabs(): HTMLElement {
+    const inFight = this.encounter.combatants.length;
+    const tab = (key: Tab, label: string, extra?: HTMLElement | null) =>
+      el("button", {
+        class: this.tab === key ? "on" : "",
+        onclick: () => {
+          this.tab = key;
+          this.combatPicker = false;
+          this.render();
+          if (key === "search") this.focus();
+        },
+      }, [label, extra ?? null]);
+
+    return el("div", { class: "tabs" }, [
+      tab("search", "Search"),
+      tab("combat", "Combat", inFight
+        ? el("span", { class: "tab-count", text: String(inFight) })
+        : null),
+    ]);
   }
 
   /** The last roll, shown as a persistent strip above the footer. */
@@ -404,7 +448,7 @@ export class Panel {
       title: this.encounter.combatants.length
         ? `Combat — round ${this.encounter.round}`
         : "Combat tracker",
-      onclick: () => { this.view = "combat"; this.render(); },
+      onclick: () => { this.tab = "combat"; this.render(); },
     }, [icon("swords", 15)]);
 
     const settingsBtn = el("button", {
@@ -509,7 +553,7 @@ export class Panel {
     const tile = (group: RuleGroup, countLabel: string, wide = false) =>
       el("button", {
         class: `tile${wide ? " wide" : ""}`,
-        onclick: () => { this.query = GROUP_LABELS[group]; this.runSearch(); },
+        onclick: () => this.openCatalog(group),
       }, [
         icon(GROUP_ICONS[group], 18),
         el("span", { class: "tile-name", text: GROUP_LABELS[group] }),
@@ -711,7 +755,8 @@ export class Panel {
   private quickActions(rule: Rule): QuickAction[] {
     const actions: QuickAction[] = [...(rule.actions ?? [])];
 
-    for (const attack of rule.monster?.actions ?? []) {
+    const scaled = rule.monster ? scaleStatBlock(rule.monster, this.scaleDelta) : undefined;
+    for (const attack of scaled?.actions ?? []) {
       if (attack.value?.startsWith("+")) {
         actions.push({ kind: "roll", label: `${attack.name} ${attack.value}`, expr: `1d20 ${attack.value}` });
       }
@@ -721,17 +766,23 @@ export class Panel {
 
   /** Drops a monster straight into the tracker, rolling its initiative. */
   private addToCombat(rule: Rule) {
-    if (!rule.monster) { this.view = "combat"; this.render(); return; }
+    if (!rule.monster) { this.tab = "combat"; this.render(); return; }
 
+    const scaled = scaleStatBlock(rule.monster, this.scaleDelta);
     const existing = this.encounter.combatants.filter((c) => c.ruleId === rule.id).length;
-    const combatant = combatantFromMonster(rule, existing ? String(existing + 1) : undefined);
-    combatant.initiative = roll("1d20").total + Math.floor((rule.monster.abilities.dex - 10) / 2);
+    const suffix = [
+      existing ? String(existing + 1) : "",
+      this.scaleDelta ? `(CR ${scaled.cr})` : "",
+    ].filter(Boolean).join(" ");
+
+    const combatant = combatantFromMonster({ ...rule, monster: scaled }, suffix || undefined);
+    combatant.initiative = roll("1d20").total + Math.floor((scaled.abilities.dex - 10) / 2);
 
     void this.updateEncounter({
       ...this.encounter,
       combatants: [...this.encounter.combatants, combatant],
     });
-    this.view = "combat";
+    this.tab = "combat";
   }
 
   /**
@@ -773,8 +824,42 @@ export class Panel {
   }
 
   private renderMonster(rule: Rule): HTMLElement[] {
-    const m = rule.monster!;
+    const base = rule.monster!;
+    const m = scaleStatBlock(base, this.scaleDelta);
     const out: HTMLElement[] = [];
+
+    const step = (by: number) =>
+      el("button", {
+        class: "mini-btn",
+        text: by > 0 ? "+" : "−",
+        "aria-label": by > 0 ? "scale up" : "scale down",
+        onclick: () => {
+          this.scaleDelta = Math.max(-6, Math.min(10, this.scaleDelta + by));
+          this.render();
+        },
+      });
+
+    out.push(el("div", { class: "scaler" }, [
+      el("span", { class: "stat-k", text: "Scale" }),
+      el("div", { class: "stepper" }, [
+        step(-1),
+        el("span", { class: "value", text: this.scaleDelta > 0 ? `+${this.scaleDelta}` : String(this.scaleDelta) }),
+        step(1),
+      ]),
+      el("span", { class: "stat-k", text: `CR ${base.cr} → ${m.cr}` }),
+      this.scaleDelta
+        ? el("button", {
+            class: "mini-btn", text: "Reset",
+            onclick: () => { this.scaleDelta = 0; this.render(); },
+          })
+        : null,
+      this.scaleDelta
+        ? el("span", {
+            class: "note",
+            text: "Approximate homebrew scaling — HP, AC, attack bonuses, save DCs and damage dice are adjusted. The SRD has no official rules for this.",
+          })
+        : null,
+    ]));
 
     const stat = (k: string, v: string, note?: string) =>
       el("div", { class: "stat" }, [
@@ -886,6 +971,213 @@ export class Panel {
       if (kv.length) meta.push(el("div", { class: "section-body" }, kv));
     }
     return [...meta, el("div", { class: "section-body" }, [prose(rule.body, (expr) => this.doRoll(expr, rule.title))])];
+  }
+
+  // ----------------------------------------------------------- catalog --
+  private openCatalog(group: RuleGroup) {
+    this.catalogGroup = group;
+    this.catalogFilter = {};
+    this.catalogSort = group === "bestiary" ? "cr" : group === "spells" ? "level" : "name";
+    this.catalogShown = CATALOG_PAGE;
+    this.view = "catalog";
+    this.render();
+  }
+
+  private catalogEntries(): Rule[] {
+    const pool = this.rules.filter(
+      (r) => r.group === this.catalogGroup && matchesFilter(r, this.catalogFilter)
+    );
+
+    const sorters: Record<SortKey, (a: Rule, b: Rule) => number> = {
+      name: (a, b) => a.title.localeCompare(b.title),
+      cr: (a, b) => crValue(a.monster?.cr ?? "0") - crValue(b.monster?.cr ?? "0"),
+      ac: (a, b) => (a.monster?.ac ?? 0) - (b.monster?.ac ?? 0),
+      hp: (a, b) => (a.monster?.hp ?? 0) - (b.monster?.hp ?? 0),
+      level: (a, b) =>
+        (a.spell?.level ?? a.feature?.level ?? 0) - (b.spell?.level ?? b.feature?.level ?? 0),
+    };
+
+    return pool.sort((a, b) => sorters[this.catalogSort](a, b) || a.title.localeCompare(b.title));
+  }
+
+  private setFilter(patch: Partial<StatFilter>) {
+    this.catalogFilter = { ...this.catalogFilter, ...patch };
+    this.catalogShown = CATALOG_PAGE;
+    this.render();
+  }
+
+  /** A min/max pair; blank means "no bound on this end". */
+  private rangeRow(label: string, key: "cr" | "ac" | "hp" | "level", step = 1): HTMLElement {
+    const range = this.catalogFilter[key] ?? {};
+    const box = (which: "min" | "max", placeholder: string) =>
+      el("input", {
+        type: "number", step: String(step), placeholder,
+        value: range[which] === undefined ? "" : String(range[which]),
+        "aria-label": `${label} ${which}`,
+        oninput: (e: Event) => {
+          const raw = (e.target as HTMLInputElement).value;
+          const next = { ...range, [which]: raw === "" ? undefined : Number(raw) };
+          this.catalogFilter = {
+            ...this.catalogFilter,
+            [key]: next.min === undefined && next.max === undefined ? undefined : next,
+          };
+          this.catalogShown = CATALOG_PAGE;
+          // List-only refresh: a full re-render would rebuild this input
+          // mid-keystroke and drop the caret before the second digit.
+          this.renderCatalogListOnly();
+        },
+      });
+
+    return el("div", { class: "filter-row" }, [
+      el("span", { class: "stat-k", text: label }),
+      box("min", "min"), el("span", { text: "–" }), box("max", "max"),
+    ]);
+  }
+
+  private selectRow(
+    label: string, value: string | undefined, options: string[], onPick: (next?: string) => void
+  ): HTMLElement {
+    const select = el("select", {
+      "aria-label": label,
+      onchange: (e: Event) => onPick((e.target as HTMLSelectElement).value || undefined),
+    }, [
+      el("option", { value: "", text: `Any ${label.toLowerCase()}` }),
+      ...options.map((o) => el("option", { value: o, text: o })),
+    ]);
+    select.value = value ?? "";
+    return el("div", { class: "filter-row" }, [el("span", { class: "stat-k", text: label }), select]);
+  }
+
+  private renderCatalogFilters(): HTMLElement {
+    const group = this.catalogGroup;
+    const rows: HTMLElement[] = [];
+
+    const nameInput = el("input", {
+      type: "text", placeholder: "Filter by name…",
+      value: this.catalogFilter.name ?? "",
+      "aria-label": "name filter",
+      oninput: (e: Event) => {
+        const value = (e.target as HTMLInputElement).value;
+        this.catalogFilter = { ...this.catalogFilter, name: value || undefined };
+        this.catalogShown = CATALOG_PAGE;
+        this.renderCatalogListOnly();
+      },
+    });
+    rows.push(el("div", { class: "filter-row" }, [nameInput]));
+
+    const uniques = (pick: (r: Rule) => string | undefined) =>
+      Array.from(new Set(this.rules.filter((r) => r.group === group).map(pick).filter(Boolean) as string[]))
+        .sort();
+
+    if (group === "bestiary") {
+      rows.push(this.rangeRow("CR", "cr", 0.25));
+      rows.push(this.rangeRow("AC", "ac"));
+      rows.push(this.rangeRow("HP", "hp"));
+      rows.push(this.selectRow("Type", this.catalogFilter.type, uniques((r) => r.category),
+        (type) => this.setFilter({ type })));
+    } else if (group === "spells") {
+      rows.push(this.rangeRow("Level", "level"));
+      rows.push(this.selectRow("School", this.catalogFilter.school,
+        uniques((r) => r.spell?.school), (school) => this.setFilter({ school })));
+      rows.push(el("div", { class: "filter-row" }, [
+        el("button", {
+          class: `chip${this.catalogFilter.concentration ? " on" : ""}`,
+          text: "Concentration",
+          onclick: () => this.setFilter({ concentration: this.catalogFilter.concentration ? undefined : true }),
+        }),
+        el("button", {
+          class: `chip${this.catalogFilter.ritual ? " on" : ""}`,
+          text: "Ritual",
+          onclick: () => this.setFilter({ ritual: this.catalogFilter.ritual ? undefined : true }),
+        }),
+      ]));
+    } else if (group === "items") {
+      rows.push(this.selectRow("Rarity", this.catalogFilter.rarity,
+        ["common", "uncommon", "rare", "very rare", "legendary", "artifact"],
+        (rarity) => this.setFilter({ rarity })));
+    } else if (group === "classes") {
+      rows.push(this.rangeRow("Level", "level"));
+    }
+
+    const sorts: SortKey[] = group === "bestiary"
+      ? ["name", "cr", "ac", "hp"]
+      : group === "spells" || group === "classes" ? ["name", "level"] : ["name"];
+
+    if (sorts.length > 1) {
+      const select = el("select", {
+        "aria-label": "sort",
+        onchange: (e: Event) => {
+          this.catalogSort = (e.target as HTMLSelectElement).value as SortKey;
+          this.render();
+        },
+      }, sorts.map((s) => el("option", { value: s, text: `Sort by ${s.toUpperCase()}` })));
+      select.value = this.catalogSort;
+      rows.push(el("div", { class: "filter-row" }, [
+        el("span", { class: "stat-k", text: "Sort" }), select,
+      ]));
+    }
+
+    return el("div", { class: "filters" }, rows);
+  }
+
+  /**
+   * The name filter re-renders only the list, so the text field keeps focus
+   * and the caret while you type into it.
+   */
+  private renderCatalogListOnly() {
+    const body = this.root.querySelector(".body");
+    const count = this.root.querySelector(".catalog-count");
+    if (!body || !count) { this.render(); return; }
+    const fresh = this.renderCatalogBody();
+    body.replaceWith(fresh.body);
+    count.replaceWith(fresh.count);
+  }
+
+  private renderCatalogBody(): { count: HTMLElement; body: HTMLElement } {
+    const entries = this.catalogEntries();
+    const shown = entries.slice(0, this.catalogShown);
+
+    const count = el("div", { class: "catalog-count" }, [
+      el("span", { text: `${entries.length} of ${this.counts[this.catalogGroup]}` }),
+      isFilterActive(this.catalogFilter)
+        ? el("button", {
+            class: "mini-btn", text: "Clear filters", style: "margin-left:auto",
+            onclick: () => { this.catalogFilter = {}; this.catalogShown = CATALOG_PAGE; this.render(); },
+          })
+        : null,
+    ]);
+
+    const body = el("div", { class: "body" });
+    if (!entries.length) {
+      body.append(el("div", { class: "empty", text: "Nothing matches those filters." }));
+      return { count, body };
+    }
+
+    for (const rule of shown) {
+      body.append(el("button", { class: "row", onclick: () => this.open(rule) }, [
+        el("div", { class: "row-main" }, [
+          el("span", { class: "row-title", text: rule.title }),
+          rule.subtitle ? el("span", { class: "row-sub", text: rule.subtitle }) : null,
+        ]),
+        rule.badge ? el("span", { class: "row-badge", text: rule.badge }) : null,
+      ]));
+    }
+
+    if (entries.length > shown.length) {
+      body.append(el("button", {
+        class: "more-btn",
+        text: `Show ${Math.min(CATALOG_PAGE, entries.length - shown.length)} more`,
+        onclick: () => { this.catalogShown += CATALOG_PAGE; this.renderCatalogListOnly(); },
+      }));
+    }
+    return { count, body };
+  }
+
+  private renderCatalog(): DocumentFragment {
+    const frag = document.createDocumentFragment();
+    const { count, body } = this.renderCatalogBody();
+    frag.append(this.renderCatalogFilters(), count, body);
+    return frag;
   }
 
   // -------------------------------------------------------------- flow --

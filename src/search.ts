@@ -161,11 +161,26 @@ export function search(
 ): SearchMatch[] {
   const { now = Date.now(), limit = 40, sources } = options;
 
-  const spacedQuery = normalize(rawQuery);
-  if (!spacedQuery) return [];
-  const query = compactKey(rawQuery);
+  const { filter, text: strippedQuery } = parseStatQuery(rawQuery);
+  const filtering = isFilterActive(filter);
 
-  const enabled = sources ? rules.filter((r) => sources[r.group] !== false) : rules;
+  const spacedQuery = normalize(strippedQuery);
+  if (!spacedQuery && !filtering) return [];
+  const query = compactKey(strippedQuery);
+
+  let enabled = sources ? rules.filter((r) => sources[r.group] !== false) : rules;
+  if (filtering) enabled = enabled.filter((r) => matchesFilter(r, filter));
+
+  // A pure stat query ("ac>18 cr<5") has no text to rank, so list the
+  // matches themselves, cheapest ordering first.
+  if (!spacedQuery) {
+    return [...enabled]
+      .sort((a, b) =>
+        (a.monster && b.monster ? crValue(a.monster.cr) - crValue(b.monster.cr) : 0) ||
+        a.title.localeCompare(b.title))
+      .slice(0, limit)
+      .map((rule) => ({ rule, score: 1, via: "body" as const }));
+  }
   const rulesById = new Map(enabled.map((r) => [r.id, r]));
   const best = new Map<string, SearchMatch>();
 
@@ -244,6 +259,101 @@ export function search(
     .map((match) => ({ ...match, score: match.score * recencyMultiplier(match.rule.id, recency, now) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
+}
+
+// ------------------------------------------------------- stat filters ---
+export type Range = { min?: number; max?: number };
+
+export type StatFilter = {
+  cr?: Range;
+  ac?: Range;
+  hp?: Range;
+  level?: Range;
+  type?: string;
+  school?: string;
+  rarity?: string;
+  concentration?: boolean;
+  ritual?: boolean;
+  name?: string;
+};
+
+function inRange(value: number | undefined, range: Range | undefined): boolean {
+  if (!range || value === undefined) return !range;
+  if (range.min !== undefined && value < range.min) return false;
+  if (range.max !== undefined && value > range.max) return false;
+  return true;
+}
+
+export function crValue(cr: string): number {
+  if (cr.includes("/")) {
+    const [a, b] = cr.split("/").map(Number);
+    return b ? a / b : 0;
+  }
+  return Number(cr) || 0;
+}
+
+export function matchesFilter(rule: Rule, filter: StatFilter): boolean {
+  if (filter.name && !rule.title.toLowerCase().includes(filter.name.toLowerCase())) return false;
+
+  if (filter.cr || filter.ac || filter.hp || filter.type) {
+    const m = rule.monster;
+    if (!m) return false;
+    if (!inRange(crValue(m.cr), filter.cr)) return false;
+    if (!inRange(m.ac, filter.ac)) return false;
+    if (!inRange(m.hp, filter.hp)) return false;
+    if (filter.type && rule.category !== filter.type) return false;
+  }
+
+  if (filter.school || filter.concentration !== undefined || filter.ritual !== undefined) {
+    if (!rule.spell) return false;
+    if (filter.school && rule.spell.school.toLowerCase() !== filter.school.toLowerCase()) return false;
+    if (filter.concentration !== undefined && rule.spell.concentration !== filter.concentration) return false;
+    if (filter.ritual !== undefined && rule.spell.ritual !== filter.ritual) return false;
+  }
+
+  // "level" means spell level for spells and class level for features.
+  if (filter.level) {
+    const level = rule.spell?.level ?? rule.feature?.level;
+    if (!inRange(level, filter.level)) return false;
+  }
+
+  if (filter.rarity) {
+    if (!rule.item) return false;
+    if (!rule.item.rarity.toLowerCase().includes(filter.rarity.toLowerCase())) return false;
+  }
+
+  return true;
+}
+
+export function isFilterActive(filter: StatFilter): boolean {
+  return Object.values(filter).some((v) => v !== undefined && v !== "");
+}
+
+const STAT_TOKEN_RE = /\b(cr|ac|hp|level|lvl)\s*(>=|<=|>|<|=)\s*(\d+(?:\.\d+)?|\d+\/\d+)\b/gi;
+
+/**
+ * Pulls "ac>15 cr<=5" style operators out of a query so they can filter the
+ * pool, and returns whatever text is left for ordinary matching. Lets the
+ * search box answer "which monsters can I actually hit" without a UI.
+ */
+export function parseStatQuery(raw: string): { filter: StatFilter; text: string } {
+  const filter: StatFilter = {};
+  STAT_TOKEN_RE.lastIndex = 0;
+
+  const text = raw.replace(STAT_TOKEN_RE, (_match, keyRaw: string, op: string, valueRaw: string) => {
+    const key = keyRaw.toLowerCase() === "lvl" ? "level" : (keyRaw.toLowerCase() as "cr" | "ac" | "hp" | "level");
+    const value = crValue(valueRaw);
+    const range: Range = filter[key] ?? {};
+    if (op === ">") range.min = value + (key === "cr" ? 0.001 : 1);
+    else if (op === ">=") range.min = value;
+    else if (op === "<") range.max = value - (key === "cr" ? 0.001 : 1);
+    else if (op === "<=") range.max = value;
+    else { range.min = value; range.max = value; }
+    filter[key] = range;
+    return " ";
+  });
+
+  return { filter, text: text.trim() };
 }
 
 /** Ranks decision flows against the query, using the same token overlap. */

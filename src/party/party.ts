@@ -23,13 +23,30 @@ function status(message: string) {
   if (message) setTimeout(() => { if (statusEl.textContent === message) statusEl.textContent = ""; }, 4000);
 }
 
-async function persist() {
-  await saveParty(party);
+let saveTimer: number | undefined;
+
+/**
+ * Autosaves on every keystroke rather than on blur. Waiting for `change`
+ * meant typing a name and closing the tab lost it, and any list edit
+ * re-rendered from stored state over the top of the pending field.
+ */
+async function persist(immediate = false) {
+  clearTimeout(saveTimer);
+  statusEl.textContent = "Saving…";
+  if (immediate) {
+    await saveParty(party);
+    status("All changes saved.");
+    return;
+  }
+  saveTimer = setTimeout(async () => {
+    await saveParty(party);
+    status("All changes saved.");
+  }, 250) as unknown as number;
 }
 
-function patch(id: string, changes: Partial<Character>) {
+function patch(id: string, changes: Partial<Character>, immediate = false) {
   party = party.map((c) => (c.id === id ? { ...c, ...changes } : c));
-  void persist();
+  void persist(immediate);
 }
 
 function numberCell(label: string, value: number, onChange: (next: number) => void) {
@@ -37,7 +54,7 @@ function numberCell(label: string, value: number, onChange: (next: number) => vo
     el("span", { class: "stat-k", text: label }),
     el("input", {
       type: "number", value: String(value), "aria-label": label,
-      onchange: (e: Event) => onChange(parseInt((e.target as HTMLInputElement).value, 10) || 0),
+      oninput: (e: Event) => onChange(parseInt((e.target as HTMLInputElement).value, 10) || 0),
     }),
   ]);
 }
@@ -133,12 +150,12 @@ function renderCharacter(character: Character) {
   const head = el("div", { class: "char-head" }, [
     el("input", {
       class: "char-name", type: "text", value: character.name, "aria-label": "character name",
-      onchange: (e: Event) => patch(character.id, { name: (e.target as HTMLInputElement).value }),
+      oninput: (e: Event) => patch(character.id, { name: (e.target as HTMLInputElement).value }),
     }),
     el("input", {
       class: "text-input", type: "text", value: character.className, placeholder: "Class",
       "aria-label": "class",
-      onchange: (e: Event) => patch(character.id, { className: (e.target as HTMLInputElement).value }),
+      oninput: (e: Event) => patch(character.id, { className: (e.target as HTMLInputElement).value }),
     }),
     el("button", {
       class: "mini-btn danger", text: "Delete",
@@ -171,7 +188,7 @@ function renderCharacter(character: Character) {
     el("textarea", {
       placeholder: "Anything else worth remembering mid-session…",
       "aria-label": "notes",
-      onchange: (e: Event) => patch(character.id, { notes: (e.target as HTMLTextAreaElement).value }),
+      oninput: (e: Event) => patch(character.id, { notes: (e.target as HTMLTextAreaElement).value }),
     }),
   ]);
   (notes.querySelector("textarea") as HTMLTextAreaElement).value = character.notes;

@@ -33,6 +33,22 @@ unpacked** → select the `dist/` folder.
 - **Pin** an entry from its header to keep it in a persistent list — handy
   for the statblock you're running this combat. The pinned view shows a
   condensed AC/HP/speed line plus its attacks.
+- **Search** and **Combat** are top-level tabs, so you can flip between
+  looking something up and running the fight without losing either.
+
+### Browsing and filtering
+
+Tapping a category on the home screen opens its **full catalogue** — all 334
+monsters, all 319 spells — rather than a capped search. Each catalogue
+filters on the stats that matter for it:
+
+- **Bestiary**: CR, AC and HP ranges, creature type; sort by CR, AC or HP.
+- **Spells**: level range, school, concentration/ritual.
+- **Items**: rarity. **Classes**: level.
+
+The same filters work straight from the search box using comparisons —
+`ac>=17 cr<=5`, `dragon cr>=10`, `level<3 fire` — mixing a stat filter with
+ordinary text.
 
 ### Beyond looking rules up
 
@@ -54,13 +70,19 @@ unpacked** → select the `dist/` folder.
 - **Related rules** turns `seeAlso` into a real graph — links are followed in
   both directions, so Prone lists everything that can knock you down, not
   just what it happens to point at.
-- **Combat tracker** (crossed-swords icon): initiative order, HP, AC,
+- **Scale a monster** from its stat block: step the CR up or down and HP,
+  AC, attack bonuses, save DCs and damage dice all move with it, so a
+  goblin can menace a level-8 party. Adding a scaled monster to combat
+  carries the adjusted numbers over. This is explicitly homebrew — the SRD
+  has no official scaling rules — and the panel says so.
+- **Combat tracker** (its own tab): initiative order, HP, AC,
   conditions, concentration with its Con save, death-save pips, reaction
   used/ready, and movement remaining. Monsters come in with their stat block
   already filled in and their attacks one tap from a roll.
 - **Party roster** (a full tab, linked from settings): characters with
   stats, plus spells/actions/items picked from the SRD **or typed in as free
-  text** for homebrew. Export hands someone a party file; import loads one.
+  text** for homebrew. Everything autosaves as you type — there is no save
+  button to forget. Export hands someone a party file; import loads one.
 
 Rebind either hotkey at `chrome://extensions/shortcuts` if it collides with
 something else (e.g. a VTT's own shortcuts).
@@ -97,6 +119,7 @@ src/
   background.ts        # service worker: hotkeys, selection capture, side-panel behavior
   search.ts             # alias resolution, ranking tiers, recency, question parsing
   dice.ts                # expression parsing, rolling, roll log
+  scale.ts                # approximate monster CR scaling
   settings.ts             # sources / appearance / behavior, persisted locally
   pins.ts                  # pinned entry ids
   party.ts                  # party roster storage, export/import
