@@ -1,4 +1,4 @@
-import type { AliasTable, Rule } from "../types";
+import type { AliasTable, Rule, RuleGroup } from "./types";
 
 export type SearchMatch = {
   rule: Rule;
@@ -90,19 +90,44 @@ export function buildAliasIndex(aliases: AliasTable): Map<string, string> {
   return index;
 }
 
+/**
+ * Locates the query inside a title for result highlighting, comparing on
+ * alphanumerics only so "short sword" still highlights within "Shortsword".
+ * Returns a range in the ORIGINAL string, or null when there's no run to mark.
+ */
+export function findHighlight(title: string, rawQuery: string): [number, number] | null {
+  const query = compactKey(rawQuery);
+  if (!query) return null;
+
+  // Map each compacted character back to its index in the original title.
+  const positions: number[] = [];
+  let compact = "";
+  for (let i = 0; i < title.length; i++) {
+    const ch = title[i].toLowerCase();
+    if (ch >= "a" && ch <= "z") { compact += ch; positions.push(i); }
+    else if (ch >= "0" && ch <= "9") { compact += ch; positions.push(i); }
+  }
+
+  const at = compact.indexOf(query);
+  if (at === -1) return null;
+  return [positions[at], positions[at + query.length - 1] + 1];
+}
+
 export function search(
   rawQuery: string,
   rules: Rule[],
   aliasIndex: Map<string, string>,
   recency: Record<string, number>,
-  now: number = Date.now(),
-  limit = 8
+  options: { now?: number; limit?: number; sources?: Record<RuleGroup, boolean> } = {}
 ): SearchMatch[] {
+  const { now = Date.now(), limit = 40, sources } = options;
+
   const spacedQuery = normalize(rawQuery);
   if (!spacedQuery) return [];
   const query = compactKey(rawQuery);
 
-  const rulesById = new Map(rules.map((r) => [r.id, r]));
+  const enabled = sources ? rules.filter((r) => sources[r.group] !== false) : rules;
+  const rulesById = new Map(enabled.map((r) => [r.id, r]));
   const best = new Map<string, SearchMatch>();
 
   const consider = (rule: Rule | undefined, score: number, via: SearchMatch["via"]) => {
@@ -131,7 +156,7 @@ export function search(
   }
 
   // Tiers 3-6: title / body, direct against the rule set.
-  for (const rule of rules) {
+  for (const rule of enabled) {
     const titleKey = compactKey(rule.title);
     if (titleKey === query) {
       consider(rule, SCORE_EXACT_TITLE, "title");

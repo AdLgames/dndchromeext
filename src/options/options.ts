@@ -1,19 +1,29 @@
-import { clearMisses, getMisses } from "../content/search";
+import { clearMisses, getMisses } from "../search";
+import { getSettings, resolveTheme } from "../settings";
+import { el } from "../ui/dom";
 
-const TOGGLE_COMMAND = "toggle-overlay";
+const COMMAND_LABELS: Record<string, string> = {
+  "toggle-overlay": "Open/close the overlay",
+  "lookup-selection": "Look up selected text",
+};
 
-async function renderShortcut() {
-  const statusEl = document.getElementById("shortcut-status")!;
+async function renderShortcuts() {
+  const host = document.getElementById("shortcuts")!;
+  host.textContent = "";
   const commands = await chrome.commands.getAll();
-  const toggle = commands.find((c) => c.name === TOGGLE_COMMAND);
 
-  if (toggle?.shortcut) {
-    statusEl.textContent = `Current shortcut: ${toggle.shortcut}`;
-    statusEl.classList.remove("unset");
-  } else {
-    statusEl.textContent = "No shortcut is set yet — the overlay won't open until you assign one below.";
-    statusEl.classList.add("unset");
+  const list = el("ul", {});
+  for (const command of commands) {
+    if (!command.name || command.name === "_execute_action") continue;
+    list.append(el("li", {}, [
+      el("span", { text: COMMAND_LABELS[command.name] ?? command.description ?? command.name }),
+      el("span", {
+        class: `status count${command.shortcut ? "" : " unset"}`,
+        text: command.shortcut || "Not set",
+      }),
+    ]));
   }
+  host.append(list);
 }
 
 function relativeTime(ts: number): string {
@@ -24,28 +34,21 @@ function relativeTime(ts: number): string {
 }
 
 async function renderMisses() {
-  const listEl = document.getElementById("misses-list")!;
-  const emptyEl = document.getElementById("misses-empty")!;
+  const list = document.getElementById("misses-list")!;
+  const empty = document.getElementById("misses-empty")!;
   const misses = await getMisses();
 
-  listEl.innerHTML = "";
-  if (misses.length === 0) {
-    emptyEl.style.display = "block";
-    listEl.style.display = "none";
-    return;
-  }
-  emptyEl.style.display = "none";
-  listEl.style.display = "block";
+  list.textContent = "";
+  const has = misses.length > 0;
+  empty.style.display = has ? "none" : "block";
+  list.style.display = has ? "block" : "none";
+  if (!has) return;
 
   for (const miss of misses.sort((a, b) => b.count - a.count || b.lastSeen - a.lastSeen)) {
-    const li = document.createElement("li");
-    const query = document.createElement("span");
-    query.textContent = miss.query;
-    const count = document.createElement("span");
-    count.className = "count";
-    count.textContent = `${miss.count}× · ${relativeTime(miss.lastSeen)}`;
-    li.append(query, count);
-    listEl.appendChild(li);
+    list.append(el("li", {}, [
+      el("span", { text: miss.query }),
+      el("span", { class: "count", text: `${miss.count}× · ${relativeTime(miss.lastSeen)}` }),
+    ]));
   }
 }
 
@@ -58,5 +61,10 @@ document.getElementById("clear-misses")!.addEventListener("click", async () => {
   await renderMisses();
 });
 
-void renderShortcut();
+async function applyTheme() {
+  document.body.dataset.theme = resolveTheme((await getSettings()).appearance);
+}
+
+void applyTheme();
+void renderShortcuts();
 void renderMisses();

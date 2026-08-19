@@ -3,93 +3,70 @@
 <head>
 <meta charset="utf-8" />
 <title>Rules Overlay — Options</title>
+<link rel="stylesheet" href="theme.css" />
+<link rel="stylesheet" href="panel.css" />
 <style>
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: #1b1523;
-    color: #f1ecfb;
-    max-width: 480px;
-    margin: 48px auto;
-    padding: 0 20px;
+    margin: 0;
+    padding: 48px 20px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
   }
-  h1 { font-size: 20px; }
-  h2 { font-size: 15px; margin-bottom: 4px; }
-  p { line-height: 1.5; color: #d9cfec; }
-  #shortcut-status {
-    font-size: 15px;
-    font-weight: 600;
-    padding: 10px 14px;
-    border-radius: 8px;
-    background: #241a30;
-    border: 1px solid #3c2f52;
+  main { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+  h1 {
+    font-family: var(--font-heading);
+    font-size: 26px;
+    font-weight: 500;
+    margin: 0;
+    letter-spacing: -0.01em;
   }
-  #shortcut-status.unset {
-    color: #f3b6b6;
-    border-color: #6a3a3a;
-  }
-  button {
-    margin-top: 16px;
-    padding: 10px 16px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #1b1523;
-    background: #c9b6ee;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-  }
-  button:hover { background: #d9c9f7; }
-  button.secondary {
-    background: transparent;
-    color: #c9b6ee;
-    border: 1px solid #4a3a68;
-  }
-  button.secondary:hover { background: #241a30; }
-  .hint { font-size: 13px; color: #a894c4; }
-  hr { border: none; border-top: 1px solid #2c2238; margin: 32px 0 20px; }
-  #misses-list {
-    list-style: none;
-    margin: 12px 0 0;
-    padding: 0;
-    border: 1px solid #3c2f52;
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  #misses-list li {
+  .card { border: 1px solid var(--color-divider); background: var(--panel-bg); padding: 16px 18px; }
+  .status { font-family: var(--font-heading); font-size: 15px; letter-spacing: 0.02em; }
+  .status.unset { color: var(--color-accent-700); }
+  p { line-height: 1.6; font-size: 13.5px; color: var(--color-neutral-700); margin: 8px 0 0; }
+  ul { list-style: none; margin: 12px 0 0; padding: 0; border-top: 1px solid var(--color-divider); }
+  li {
     display: flex;
     justify-content: space-between;
     gap: 12px;
-    padding: 8px 12px;
+    padding: 9px 0;
     font-size: 13.5px;
-    border-bottom: 1px solid #2c2238;
+    border-bottom: 1px solid var(--color-divider);
   }
-  #misses-list li:last-child { border-bottom: none; }
-  #misses-list .count { color: #a894c4; white-space: nowrap; }
-  #misses-empty { font-size: 13.5px; color: #a894c4; margin-top: 12px; }
+  li .count { color: var(--color-neutral-600); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
 </style>
 </head>
-<body>
-  <h1>Rules Overlay for D&D 5e</h1>
-  <p id="shortcut-status">Checking current shortcut…</p>
-  <button id="open-shortcuts" type="button">Open Chrome's keyboard shortcut settings</button>
-  <p class="hint">
-    Chrome doesn't let an extension set its own hotkey directly. The button
-    above opens Chrome's own shortcuts page, where you can assign or change
-    the binding for "Open/close the rules overlay."
-  </p>
+<body class="ro-root">
+  <main>
+    <h1>Rules Overlay for D&amp;D 5e</h1>
 
-  <hr />
+    <section class="card">
+      <span class="label">Keyboard shortcuts</span>
+      <div id="shortcuts"></div>
+      <p>
+        Chrome doesn't let an extension assign its own hotkeys. The button below opens
+        Chrome's shortcuts page, where you can set or change these bindings.
+      </p>
+      <div class="row">
+        <button id="open-shortcuts" type="button" class="btn-primary">Open Chrome shortcut settings</button>
+      </div>
+    </section>
 
-  <h2>Searches that found nothing</h2>
-  <p class="hint">
-    Stored only on this device, never sent anywhere. When a search comes up
-    empty and you close the overlay, it's logged here so misses can turn
-    into new aliases later.
-  </p>
-  <ul id="misses-list"></ul>
-  <p id="misses-empty">No unmatched searches yet.</p>
-  <button id="clear-misses" type="button" class="secondary">Clear list</button>
-
+    <section class="card">
+      <span class="label">Searches that found nothing</span>
+      <p>
+        Stored only on this device, never sent anywhere. When a search comes up empty and you
+        close the panel, it's logged here so misses can become new aliases later.
+      </p>
+      <ul id="misses-list"></ul>
+      <p id="misses-empty">No unmatched searches yet.</p>
+      <div class="row">
+        <button id="clear-misses" type="button" class="btn-primary">Clear list</button>
+      </div>
+    </section>
+  </main>
   <script src="options.js"></script>
 </body>
 </html>

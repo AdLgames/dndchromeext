@@ -1,0 +1,92 @@
+/*
+ * Design tokens from the "Rules Overlay" canvas (Book theme — warm
+ * parchment ground, amber accent). The mockup loaded EB Garamond / Lora
+ * from Google Fonts; webfonts would mean a runtime network request, which
+ * this extension never makes, so the stacks below approximate them with
+ * faces that ship with the OS.
+ *
+ * Tokens hang off .ro-root rather than :root so the same sheet works both
+ * in an extension page and inside the content script's shadow root.
+ */
+.ro-root,
+.ro-root[data-theme="light"] {
+  --color-bg: #f4ece1;
+  --color-surface: #ece1d2;
+  --color-text: #4a413c;
+  --color-divider: rgba(74, 65, 60, 0.24);
+
+  --color-accent: #bd6c45;
+  --color-accent-100: #f7ece6;
+  --color-accent-200: #f0dbd0;
+  --color-accent-300: #e5c2ad;
+  --color-accent-400: #ca906e;
+  --color-accent-500: #bd6c45;
+  --color-accent-600: #a55c39;
+  --color-accent-700: #8a4a2d;
+  --color-accent-800: #6a3924;
+  --color-accent-900: #3d2c22;
+
+  --color-neutral-100: #f2e9dd;
+  --color-neutral-400: #b6b0aa;
+  --color-neutral-600: #7d746d;
+  --color-neutral-700: #5f5852;
+  --color-neutral-800: #4f4842;
+  --color-neutral-900: #4a413c;
+
+  --on-accent: #fff;
+  --panel-bg: linear-gradient(#f5eee4, #f5eee4),
+    repeating-linear-gradient(0deg, rgba(74, 65, 60, 0.03) 0 1px, transparent 1px 6px);
+
+  --font-heading: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --font-body: Georgia, "Times New Roman", "Liberation Serif", serif;
+}
+
+/*
+ * Dark keeps every token's ROLE identical — 100 is still the subtle fill,
+ * 300 still the highlight, 700-900 still emphasis text — and only inverts
+ * the lightness, so the same markup works untouched in both themes.
+ */
+.ro-root[data-theme="dark"] {
+  --color-bg: #211b17;
+  --color-surface: #2a221d;
+  --color-text: #ece1d2;
+  --color-divider: rgba(236, 225, 210, 0.18);
+
+  --color-accent: #d2865c;
+  --color-accent-100: #33241c;
+  --color-accent-200: #402c21;
+  --color-accent-300: #6b4229;
+  --color-accent-400: #a35f3a;
+  --color-accent-500: #c97a51;
+  --color-accent-600: #d2865c;
+  --color-accent-700: #e0a077;
+  --color-accent-800: #ecbb96;
+  --color-accent-900: #f6d8ba;
+
+  --color-neutral-100: #2f2721;
+  --color-neutral-400: #6b625b;
+  --color-neutral-600: #a2968b;
+  --color-neutral-700: #bcb0a3;
+  --color-neutral-800: #d6c9ba;
+  --color-neutral-900: #ece1d2;
+
+  --on-accent: #1c1410;
+  --panel-bg: linear-gradient(#211b17, #211b17),
+    repeating-linear-gradient(0deg, rgba(236, 225, 210, 0.02) 0 1px, transparent 1px 6px);
+}
+
+.ro-root *,
+.ro-root *::before,
+.ro-root *::after {
+  box-sizing: border-box;
+}
+
+.ro-root ::selection {
+  background: var(--color-accent-300);
+  color: var(--color-accent-900);
+}
+
+.ro-root :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

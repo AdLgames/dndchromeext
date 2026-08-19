@@ -3,7 +3,7 @@
 // project (https://github.com/5e-bits/5e-database, MIT-licensed structuring
 // of the WotC SRD content, which we in turn attribute as SRD 5.1 CC-BY-4.0
 // per our own README/footer) into our source-entry shape and writes
-// data-src/srd-{spells,monsters,magic-items}-source.json.
+// data-src/srd-{spells,monsters,magic-items,classes}-source.json.
 //
 // NOT part of the normal build — build-rules.ts consumes these generated
 // files same as the hand-authored one. Re-run this only to refresh from a
@@ -18,14 +18,6 @@ function loadJson(file) {
   return JSON.parse(readFileSync(`${dataDir}/${file}`, "utf8"));
 }
 
-function truncate(text, max) {
-  const t = text.trim();
-  if (t.length <= max) return t;
-  const cut = t.slice(0, max);
-  const lastSpace = cut.lastIndexOf(" ");
-  return `${(lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
-}
-
 function formatCR(cr) {
   if (cr === 0.125) return "1/8";
   if (cr === 0.25) return "1/4";
@@ -33,102 +25,233 @@ function formatCR(cr) {
   return String(cr);
 }
 
+function sentenceCase(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Upstream indexes occasionally carry doubled/trailing hyphens. */
+function slug(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function joinDesc(desc) {
+  return (desc ?? []).join("\n").trim();
+}
+
 // ---------------------------------------------------------------- spells --
+const ORDINAL = ["Cantrip", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
+
 function transformSpells() {
-  const spells = loadJson("5e-SRD-Spells.json");
-  return spells.map((s) => {
-    const levelSchool = s.level === 0 ? `${s.school.name} cantrip` : `Level ${s.level} ${s.school.name}`;
-    const components = s.components.join(", ") + (s.material ? ` (${s.material})` : "");
-    const duration = s.concentration ? `Concentration, ${s.duration}` : s.duration;
-    const ritual = s.ritual ? " (ritual)" : "";
-
-    const header = `${levelSchool}${ritual}. Casting time ${s.casting_time}. Range ${s.range}. Components ${components}. Duration ${duration}.`;
-    const effect = truncate((s.desc ?? []).join(" "), 420);
-    const higher = s.higher_level?.length ? ` At higher levels: ${truncate(s.higher_level.join(" "), 140)}` : "";
-
-    const related = [];
-    if (s.concentration) related.push("concentration");
-    if (s.level > 0) related.push("spell-slots");
-    else related.push("casting-time");
+  return loadJson("5e-SRD-Spells.json").map((s) => {
+    const components = s.components.join(", ");
+    const subtitleBits = [
+      s.level === 0 ? `${s.school.name} cantrip` : `${ORDINAL[s.level]}-level ${s.school.name.toLowerCase()}`,
+    ];
+    if (s.concentration) subtitleBits.push("concentration");
+    if (s.ritual) subtitleBits.push("ritual");
 
     return {
-      id: s.index,
+      id: slug(s.index),
       title: s.name,
-      category: "spells",
-      text: `${header}\n${effect}${higher}`,
-      related,
+      group: "spells",
+      category: s.school.name.toLowerCase(),
+      subtitle: subtitleBits.join(" · "),
+      badge: s.level === 0 ? "Cantrip" : `Lvl ${s.level}`,
+      text: joinDesc(s.desc),
+      related: s.concentration ? ["concentration"] : [],
+      spell: {
+        level: s.level,
+        school: s.school.name,
+        castingTime: s.casting_time,
+        range: s.range,
+        components,
+        material: s.material || undefined,
+        duration: s.duration,
+        concentration: !!s.concentration,
+        ritual: !!s.ritual,
+        classes: (s.classes ?? []).map((c) => c.name),
+        higherLevel: s.higher_level?.length ? joinDesc(s.higher_level) : undefined,
+      },
     };
   });
 }
 
 // -------------------------------------------------------------- monsters --
+const ATTACK_RE = /^((?:Melee|Ranged|Melee or Ranged)\s+(?:Weapon|Spell)\s+Attack):\s*([+-]\d+)\s+to hit,\s*/i;
+const SAVE_DC_RE = /DC\s+(\d+)\s+(\w+)\s+saving throw/i;
+const RECHARGE_RE = /^(.*?)\s*\((Recharge[^)]*|\d+\/[A-Za-z]+)\)\s*$/;
+
+function parseAction(action) {
+  let name = action.name;
+  let label;
+  let value;
+  let desc = action.desc ?? "";
+
+  const recharge = RECHARGE_RE.exec(name);
+  if (recharge) {
+    name = recharge[1];
+    label = recharge[2];
+  }
+
+  const attack = ATTACK_RE.exec(desc);
+  if (attack) {
+    label = attack[1].replace(/\s+/g, " ");
+    value = attack[2];
+    desc = sentenceCase(desc.slice(attack[0].length));
+  } else {
+    const save = SAVE_DC_RE.exec(desc);
+    if (save) value = `DC ${save[1]}`;
+  }
+
+  return { name, ...(label ? { label } : {}), ...(value ? { value } : {}), desc: desc.trim() };
+}
+
 function transformMonsters() {
-  const monsters = loadJson("5e-SRD-Monsters.json");
-  return monsters.map((m) => {
+  return loadJson("5e-SRD-Monsters.json").map((m) => {
     const ac = m.armor_class?.[0];
-    const armorNames = ac?.armor?.map((a) => a.name).join(", ");
-    const acText = ac ? `${ac.value}${armorNames ? ` (${armorNames})` : ""}` : "?";
-    const speedEntries = Object.entries(m.speed ?? {}).filter(([, v]) => typeof v === "string");
-    const speed = speedEntries.map(([k, v]) => `${k} ${v.replace(/\.$/, "")}`).join(", ");
-    const hover = m.speed?.hover ? " (hover)" : "";
-    const typeLine = `${m.size} ${m.type}${m.subtype ? ` (${m.subtype})` : ""}, ${m.alignment}`;
-    const header = `${typeLine}. AC ${acText}, HP ${m.hit_points} (${m.hit_dice}), Speed ${speed}${hover}. CR ${formatCR(m.challenge_rating)} (${m.xp} XP).`;
-    const abilities = `Str ${m.strength} Dex ${m.dexterity} Con ${m.constitution} Int ${m.intelligence} Wis ${m.wisdom} Cha ${m.charisma}.`;
+    const acNote = ac?.armor?.map((a) => a.name).join(", ") || (ac?.type !== "natural" ? ac?.type : undefined);
 
-    const traits = m.special_abilities ?? [];
-    const traitLines = traits
-      .slice(0, 2)
-      .map((t) => `${t.name}: ${truncate(t.desc, 110)}`)
-      .join(" ");
-    const traitsExtra = traits.length > 2 ? ` (+${traits.length - 2} more traits)` : "";
+    const speeds = Object.entries(m.speed ?? {})
+      .filter(([, v]) => typeof v === "string")
+      .map(([label, value]) => ({ label, value: value.replace(/\.$/, "") }));
+    if (m.speed?.hover) speeds.push({ label: "hover", value: "yes" });
 
-    const actions = m.actions ?? [];
-    const actionLines = actions
-      .slice(0, 3)
-      .map((a) => `${a.name}: ${truncate(a.desc, 120)}`)
-      .join(" ");
-    const actionsExtra = actions.length > 3 ? ` (+${actions.length - 3} more actions)` : "";
+    const profs = m.proficiencies ?? [];
+    const pick = (prefix) =>
+      profs
+        .filter((p) => p.proficiency.index.startsWith(prefix))
+        .map((p) => `${p.proficiency.name.replace(/^(Saving Throw|Skill):\s*/, "")} ${p.value >= 0 ? "+" : ""}${p.value}`)
+        .join(", ");
 
-    const lines = [header, abilities];
-    if (traitLines) lines.push(`Traits — ${traitLines}${traitsExtra}`);
-    if (actionLines) lines.push(`Actions — ${actionLines}${actionsExtra}`);
+    const senses = Object.entries(m.senses ?? {})
+      .map(([k, v]) => `${k.replace(/_/g, " ")} ${v}`)
+      .join(", ");
+
+    const list = (arr) => (arr?.length ? arr.join(", ") : undefined);
+
+    const traits = (m.special_abilities ?? []).map((t) => ({ name: t.name, desc: t.desc }));
+    const actions = (m.actions ?? []).map(parseAction);
+    const reactions = (m.reactions ?? []).map((r) => ({ name: r.name, desc: r.desc }));
+    const legendary = (m.legendary_actions ?? []).map((l) => ({ name: l.name, desc: l.desc }));
+
+    // Flattened plain text, used for body-text search and as a fallback.
+    const searchText = [
+      `${m.size} ${m.type}${m.subtype ? ` (${m.subtype})` : ""}, ${m.alignment}.`,
+      ...traits.map((t) => `${t.name}. ${t.desc}`),
+      ...actions.map((a) => `${a.name}. ${a.desc}`),
+      ...reactions.map((r) => `${r.name}. ${r.desc}`),
+      ...legendary.map((l) => `${l.name}. ${l.desc}`),
+    ].join("\n");
 
     return {
-      id: m.index,
+      id: slug(m.index),
       title: m.name,
-      category: "bestiary",
-      text: lines.join("\n"),
+      group: "bestiary",
+      category: m.type,
+      subtitle: `${m.size} ${m.type} · ${m.alignment}`,
+      badge: `CR ${formatCR(m.challenge_rating)}`,
+      text: searchText,
       related: [],
+      monster: {
+        ac: ac?.value ?? 10,
+        acNote: acNote || undefined,
+        hp: m.hit_points,
+        hitDice: m.hit_dice,
+        cr: formatCR(m.challenge_rating),
+        xp: m.xp,
+        prof: m.proficiency_bonus,
+        speeds,
+        abilities: {
+          str: m.strength, dex: m.dexterity, con: m.constitution,
+          int: m.intelligence, wis: m.wisdom, cha: m.charisma,
+        },
+        saves: pick("saving-throw-") || undefined,
+        skills: pick("skill-") || undefined,
+        vulnerabilities: list(m.damage_vulnerabilities),
+        resistances: list(m.damage_resistances),
+        immunities: list(m.damage_immunities),
+        conditionImmunities: list((m.condition_immunities ?? []).map((c) => c.name)),
+        senses: senses || undefined,
+        languages: m.languages || undefined,
+        traits, actions, reactions, legendary,
+      },
     };
   });
 }
 
 // ----------------------------------------------------------- magic items --
 function transformMagicItems() {
-  const items = loadJson("5e-SRD-Magic-Items.json");
-  return items.map((mi) => {
+  return loadJson("5e-SRD-Magic-Items.json").map((mi) => {
     const [typeLine, ...rest] = mi.desc ?? [];
-    const body = truncate(rest.join(" "), 420);
-    const text = [typeLine, body].filter(Boolean).join("\n");
-
-    const related = /attunement/i.test(mi.desc?.join(" ") ?? "") ? ["attunement"] : [];
+    const attunement = /requires attunement/i.test(typeLine ?? "");
+    const cleaned = (typeLine ?? "").replace(/\s*\(requires attunement[^)]*\)/i, "");
+    const [kind, ...rarityBits] = cleaned.split(",");
+    const rarity = rarityBits.join(",").trim();
 
     return {
-      id: mi.index,
+      id: slug(mi.index),
       title: mi.name,
-      category: "magic items",
-      text,
-      related,
+      group: "items",
+      category: mi.equipment_category?.name?.toLowerCase() ?? "wondrous item",
+      subtitle: cleaned.trim(),
+      badge: rarity ? sentenceCase(rarity) : undefined,
+      text: joinDesc(rest),
+      related: attunement ? ["attunement"] : [],
+      item: { kind: (kind ?? "").trim(), rarity, attunement },
     };
   });
 }
 
-const spellEntries = transformSpells();
-const monsterEntries = transformMonsters();
-const itemEntries = transformMagicItems();
+// -------------------------------------------------------------- classes ---
+function transformClasses() {
+  const classes = loadJson("5e-SRD-Classes.json");
+  const features = loadJson("5e-SRD-Features.json");
+  const subclasses = loadJson("5e-SRD-Subclasses.json");
+  const subclassByIndex = new Map(subclasses.map((s) => [s.index, s]));
 
-writeFileSync("data-src/srd-spells-source.json", JSON.stringify(spellEntries, null, 2) + "\n");
-writeFileSync("data-src/srd-monsters-source.json", JSON.stringify(monsterEntries, null, 2) + "\n");
-writeFileSync("data-src/srd-magic-items-source.json", JSON.stringify(itemEntries, null, 2) + "\n");
+  const classEntries = classes.map((c) => {
+    const saves = (c.saving_throws ?? []).map((s) => s.name).join(", ");
+    const armorWeapons = (c.proficiencies ?? []).map((p) => p.name).join(", ");
+    return {
+      id: slug(`class-${c.index}`),
+      title: c.name,
+      group: "classes",
+      category: "class",
+      subtitle: `Hit die d${c.hit_die} · Saves ${saves}`,
+      badge: `d${c.hit_die}`,
+      text: `Hit die: d${c.hit_die}.\nSaving throws: ${saves}.\nProficiencies: ${armorWeapons}.`,
+      related: [],
+      feature: { className: c.name },
+    };
+  });
 
-console.log(`spells: ${spellEntries.length}, monsters: ${monsterEntries.length}, magic items: ${itemEntries.length}`);
+  const featureEntries = features.map((f) => {
+    const sub = f.subclass ? subclassByIndex.get(f.subclass.index) : undefined;
+    const subName = sub?.name ?? f.subclass?.name;
+    return {
+      id: slug(`feat-${f.index}`),
+      title: f.name,
+      group: "classes",
+      category: f.class.name.toLowerCase(),
+      subtitle: [`${f.class.name}${subName ? ` (${subName})` : ""}`, `level ${f.level}`].join(" · "),
+      badge: `Lv ${f.level}`,
+      text: joinDesc(f.desc),
+      related: [],
+      feature: { className: f.class.name, level: f.level, subclass: subName },
+    };
+  });
+
+  return [...classEntries, ...featureEntries];
+}
+
+const out = {
+  "data-src/srd-spells-source.json": transformSpells(),
+  "data-src/srd-monsters-source.json": transformMonsters(),
+  "data-src/srd-magic-items-source.json": transformMagicItems(),
+  "data-src/srd-classes-source.json": transformClasses(),
+};
+
+for (const [path, entries] of Object.entries(out)) {
+  writeFileSync(path, JSON.stringify(entries, null, 2) + "\n");
+  console.log(`${path}: ${entries.length}`);
+}

@@ -1,14 +1,17 @@
-import { TOGGLE_MESSAGE, type RuntimeMessage } from "../types";
-import { createOverlay, type OverlayHandle } from "./overlay";
-import stylesText from "./styles.css";
+import { loadDataset } from "../data/load";
+import { LOOKUP_MESSAGE, TOGGLE_MESSAGE, GET_SELECTION_MESSAGE, type RuntimeMessage } from "../types";
+import { Panel } from "../ui/panel";
+import panelCss from "../ui/panel.css";
+import themeCss from "../ui/theme.css";
+import overlayCss from "./styles.css";
 
 const HOST_ID = "rules-overlay-host";
 
 let host: HTMLDivElement | null = null;
-let overlay: OverlayHandle | null = null;
+let panel: Panel | null = null;
 
-function ensureMounted(): OverlayHandle {
-  if (overlay && host) return overlay;
+function ensureMounted(): Panel {
+  if (panel && host) return panel;
 
   // A fresh host, appended to <html> (not <body> — some VTTs swap out body
   // children wholesale) with a closed shadow root. `all: initial` on the
@@ -20,43 +23,66 @@ function ensureMounted(): OverlayHandle {
     "all: initial; position: fixed; inset: 0; z-index: 2147483647; display: none;";
 
   const shadow = host.attachShadow({ mode: "closed" });
+  const style = document.createElement("style");
+  style.textContent = [themeCss, panelCss, overlayCss].join("\n");
+  shadow.append(style);
 
-  const styleEl = document.createElement("style");
-  styleEl.textContent = stylesText;
-  shadow.appendChild(styleEl);
+  const backdrop = document.createElement("div");
+  backdrop.className = "backdrop";
+  backdrop.addEventListener("click", hide);
 
-  overlay = createOverlay(shadow, { onClose: hide });
+  const frame = document.createElement("div");
+  frame.className = "ro-root frame";
 
-  document.documentElement.appendChild(host);
-  return overlay;
+  const shell = document.createElement("div");
+  shell.className = "shell";
+  shell.append(backdrop, frame);
+  shadow.append(shell);
+
+  panel = new Panel(frame, { onClose: hide });
+
+  // Keystrokes must not reach the host page — typing "t" in our search box
+  // should never toggle a VTT's token layer.
+  for (const type of ["keydown", "keyup", "keypress"] as const) {
+    frame.addEventListener(type, (e) => e.stopPropagation());
+  }
+  frame.addEventListener("keydown", (e) => panel!.handleKey(e as KeyboardEvent));
+
+  document.documentElement.append(host);
+  return panel;
 }
 
 function isOpen(): boolean {
   return !!host && host.style.display !== "none";
 }
 
-function show() {
-  const handle = ensureMounted();
+function show(query?: string) {
+  const p = ensureMounted();
   if (!host) return;
   host.style.display = "block";
-  handle.reset();
-  handle.focusInput();
-  // VTTs steal focus aggressively; re-assert on the next frame as a
-  // defensive second attempt.
-  requestAnimationFrame(() => handle.focusInput());
+  if (query) void p.lookup(query);
+  else p.reset();
+  p.focus();
+  // VTTs steal focus aggressively; re-assert on the next frame.
+  requestAnimationFrame(() => p.focus());
 }
 
 function hide() {
   if (!host) return;
-  overlay?.flushMiss();
+  panel?.flushMiss();
   host.style.display = "none";
 }
 
-function toggle() {
-  if (isOpen()) hide();
-  else show();
-}
-
-chrome.runtime.onMessage.addListener((message: RuntimeMessage) => {
-  if (message?.type === TOGGLE_MESSAGE) toggle();
+chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => {
+  if (message?.type === TOGGLE_MESSAGE) {
+    if (isOpen()) hide();
+    else show();
+  } else if (message?.type === LOOKUP_MESSAGE) {
+    show(message.query);
+  } else if (message?.type === GET_SELECTION_MESSAGE) {
+    sendResponse({ selection: window.getSelection()?.toString().trim().slice(0, 80) ?? "" });
+  }
 });
+
+// Warm the dataset while the page is idle so the first open stays instant.
+requestIdleCallback?.(() => void loadDataset(), { timeout: 4000 });

@@ -17,7 +17,7 @@ const buildOptions = {
   bundle: true,
   outdir,
   format: "iife",
-  target: "chrome110",
+  target: "chrome114",
   loader: { ".css": "text" },
   logLevel: "info",
   sourcemap: watch ? "inline" : false,
@@ -29,6 +29,14 @@ function copyStatic() {
   cpSync("icons", `${outdir}/icons`, { recursive: true });
   cpSync("src/options/options.html", `${outdir}/options.html`);
   cpSync("src/sidepanel/sidepanel.html", `${outdir}/sidepanel.html`);
+  cpSync("src/ui/theme.css", `${outdir}/theme.css`);
+  cpSync("src/ui/panel.css", `${outdir}/panel.css`);
+  // Data ships as fetchable resources rather than inside the bundles: the
+  // content script is injected into every page, so keeping ~2MB of SRD text
+  // out of it matters.
+  mkdirSync(`${outdir}/data`, { recursive: true });
+  cpSync("src/data/rules.json", `${outdir}/data/rules.json`);
+  cpSync("src/data/aliases.json", `${outdir}/data/aliases.json`);
 }
 
 if (watch) {
