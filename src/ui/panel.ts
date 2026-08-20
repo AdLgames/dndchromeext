@@ -7,6 +7,10 @@ import {
 import { loadDataset } from "../data/load";
 import { clearRollLog, formatRoll, getRollLog, pushRoll, roll, rollRepeated, type RollDetail } from "../dice";
 import { getParty, onPartyChanged } from "../party";
+import {
+  characterPortraitKey, fileToDataUrl, getPortraits, onPortraitsChanged, removePortrait,
+  setPortrait, type Portraits,
+} from "../portraits";
 import { scaleStatBlock } from "../scale";
 import { clearPins, getPins, onPinsChanged, togglePin } from "../pins";
 import {
@@ -24,6 +28,7 @@ import {
   type NamedEntry, type QuickAction, type Rule, type RuleGroup, type SourceRecord,
 } from "../types";
 import { el, highlighted, icon, prose } from "./dom";
+import { emblem, emblemFor } from "./emblem";
 
 const SRD_ATTRIBUTION =
   "Includes material from the D&D System Reference Document 5.1, © Wizards of the Coast LLC, CC BY 4.0.";
@@ -69,6 +74,8 @@ export class Panel {
   private flowsById = new Map<string, Flow>();
   private sources: SourceRecord[] = [];
   private sourcesById = new Map<string, SourceRecord>();
+  private portraits: Portraits = {};
+  private portraitError = "";
   private aliasIndex = new Map<string, string>();
   private recency: Record<string, number> = {};
   private settings: Settings = DEFAULT_SETTINGS;
@@ -114,9 +121,11 @@ export class Panel {
   }
 
   private async init() {
-    const [{ rules, aliases, flows, sources }, recency, settings, pins, encounter, party, log] = await Promise.all([
-      loadDataset(), getRecency(), getSettings(), getPins(), getEncounter(), getParty(), getRollLog(),
-    ]);
+    const [{ rules, aliases, flows, sources }, recency, settings, pins, encounter, party, log, portraits] =
+      await Promise.all([
+        loadDataset(), getRecency(), getSettings(), getPins(), getEncounter(), getParty(), getRollLog(),
+        getPortraits(),
+      ]);
     this.rules = rules;
     this.rulesById = new Map(rules.map((r) => [r.id, r]));
     this.flows = flows;
@@ -130,6 +139,7 @@ export class Panel {
     this.encounter = encounter;
     this.party = party;
     this.lastRoll = log[0] ?? null;
+    this.portraits = portraits;
     for (const rule of rules) this.counts[rule.group] += 1;
 
     onSettingsChanged((next) => { this.settings = next; this.applyTheme(); this.render(); });
@@ -139,6 +149,7 @@ export class Panel {
     // *after* this panel booted — without this it kept the empty list it
     // loaded with and "Add from your party" stayed empty forever.
     onPartyChanged((next) => { this.party = next; this.render(); });
+    onPortraitsChanged((next) => { this.portraits = next; this.render(); });
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.applyTheme());
 
     this.applyTheme();
@@ -633,6 +644,7 @@ export class Panel {
           onmouseenter: () => { this.selected = i; this.syncSelection(); },
           onclick: () => this.open(match.rule),
         }, [
+          this.picture(match.rule, 34),
           el("div", { class: "row-main" }, [
             el("span", { class: "row-title" }, highlighted(match.rule.title, range)),
             el("span", { class: "row-sub" }, [
@@ -714,12 +726,18 @@ export class Panel {
 
     const source = rule.source ? this.sourcesById.get(rule.source) : undefined;
     const head = el("div", { class: "detail-head" }, [
-      el("span", {
-        class: "kicker",
-        text: `${GROUP_LABELS[rule.group]} · ${source?.name ?? "SRD 5.1"}`,
-      }),
-      el("h1", { class: "detail-title", text: rule.title }),
-      rule.subtitle ? el("span", { class: "detail-sub", text: rule.subtitle }) : null,
+      el("div", { class: "detail-top" }, [
+        this.picture(rule, 64),
+        el("div", { class: "detail-titles" }, [
+          el("span", {
+            class: "kicker",
+            text: `${GROUP_LABELS[rule.group]} · ${source?.name ?? "SRD 5.1"}`,
+          }),
+          el("h1", { class: "detail-title", text: rule.title }),
+          rule.subtitle ? el("span", { class: "detail-sub", text: rule.subtitle }) : null,
+        ]),
+      ]),
+      this.portraitControls(rule),
     ]);
     if (rule.tldr) {
       head.append(el("div", { style: "margin-top:10px" }, [
@@ -768,6 +786,68 @@ export class Panel {
 
     body.append(...this.renderGraph(rule));
     return body;
+  }
+
+  /** An entry's picture: their own upload if set, otherwise the emblem. */
+  private picture(rule: Rule, size: number): HTMLElement {
+    return emblem(rule, { size, portrait: this.portraits[rule.id] });
+  }
+
+  /**
+   * A fighter's picture. Monsters borrow their bestiary entry's; party members
+   * are keyed on their own id, so a character can carry a portrait even though
+   * they are nobody's catalogue entry.
+   */
+  private fighterPicture(c: Combatant, size: number): HTMLElement {
+    const rule = c.ruleId ? this.rulesById.get(c.ruleId) : undefined;
+    if (rule) return this.picture(rule, size);
+    const key = characterPortraitKey(c.characterId ?? c.id);
+    return emblemFor(key, c.isPlayer ? "humanoid" : "monstrosity", {
+      size, portrait: this.portraits[key],
+    });
+  }
+
+  /**
+   * Lets the reader drop their own art onto an entry. Nothing ships with the
+   * extension — the picture lives in chrome.storage.local on this machine, so
+   * whatever they paste in stays theirs and stays offline.
+   */
+  private portraitControls(rule: Rule): HTMLElement {
+    const mine = Boolean(this.portraits[rule.id]);
+    const failed = this.portraitError;
+    // The message belongs to the upload that just failed, not the next entry.
+    this.portraitError = "";
+
+    const file = el("input", { type: "file", accept: "image/*", class: "visually-hidden" });
+    file.addEventListener("change", async () => {
+      const picked = file.files?.[0];
+      file.value = "";
+      if (!picked) return;
+      try {
+        this.portraits = await setPortrait(rule.id, await fileToDataUrl(picked));
+      } catch {
+        this.portraitError = "Could not read that image — try a PNG or JPEG.";
+      }
+      this.render();
+    });
+
+    return el("div", { class: "portrait-tools" }, [
+      file,
+      el("button", {
+        class: "portrait-btn",
+        onclick: () => file.click(),
+      }, [icon("plus", 13), mine ? "Replace picture" : "Add picture"]),
+      mine
+        ? el("button", {
+            class: "portrait-btn",
+            onclick: async () => {
+              this.portraits = await removePortrait(rule.id);
+              this.render();
+            },
+          }, [icon("trash", 13), "Remove"])
+        : null,
+      failed ? el("span", { class: "portrait-err", text: failed }) : null,
+    ]);
   }
 
   private actionIcon(action: QuickAction): "dice" | "rules" | "flow" | "diamond" {
@@ -1187,6 +1267,7 @@ export class Panel {
 
     for (const rule of shown) {
       body.append(el("button", { class: "row", onclick: () => this.open(rule) }, [
+        this.picture(rule, 34),
         el("div", { class: "row-main" }, [
           el("span", { class: "row-title", text: rule.title }),
           rule.subtitle ? el("span", { class: "row-sub", text: rule.subtitle }) : null,
@@ -1678,6 +1759,7 @@ export class Panel {
       this.encounter.started
         ? el("span", { class: "turn-index", text: String(index + 1) })
         : null,
+      this.fighterPicture(c, 26),
       el("span", { class: "fighter-init", text: String(c.initiative) }),
       el("span", { class: "fighter-name", text: c.name }),
       c.isPlayer ? el("span", { class: "fighter-tag", text: "PC" }) : null,
@@ -1938,6 +2020,7 @@ export class Panel {
         class: `pin-head${open ? " open" : ""}`,
         onclick: () => { this.openPin = open ? null : rule.id; this.render(); },
       }, [
+        this.picture(rule, 24),
         el("span", { class: "pin-name", text: rule.title }),
         rule.badge ? el("span", { class: "pin-badge", text: rule.badge }) : null,
         el("span", { class: "pin-mark", text: open ? "−" : "+" }),

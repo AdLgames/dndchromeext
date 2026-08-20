@@ -3,6 +3,11 @@ import { exportParty, getParty, newCharacter, parsePartyFile, saveParty } from "
 import { getSettings, resolveTheme } from "../settings";
 import type { AbilityScores, Character, CharacterEntry, Rule, RuleGroup } from "../types";
 import { el } from "../ui/dom";
+import { emblemFor } from "../ui/emblem";
+import {
+  characterPortraitKey, fileToDataUrl, getPortraits, removePortrait, setPortrait,
+  type Portraits,
+} from "../portraits";
 
 const ABILITY_KEYS: (keyof AbilityScores)[] = ["str", "dex", "con", "int", "wis", "cha"];
 
@@ -15,6 +20,7 @@ const LISTS: { key: "spells" | "actions" | "items"; label: string; group: RuleGr
 
 let party: Character[] = [];
 let rules: Rule[] = [];
+let portraits: Portraits = {};
 const listEl = document.getElementById("list")!;
 const statusEl = document.getElementById("status")!;
 
@@ -146,8 +152,47 @@ function renderList(character: Character, list: (typeof LISTS)[number]) {
   ]);
 }
 
+/**
+ * The character's picture: a generated emblem until someone drops their own
+ * art on it. Clicking the picture is the file picker — no separate button,
+ * because the picture is the affordance.
+ */
+function renderPortrait(character: Character) {
+  const key = characterPortraitKey(character.id);
+  const file = el("input", { type: "file", accept: "image/*", style: "display:none" });
+  file.addEventListener("change", async () => {
+    const picked = file.files?.[0];
+    file.value = "";
+    if (!picked) return;
+    try {
+      portraits = await setPortrait(key, await fileToDataUrl(picked));
+      render();
+    } catch {
+      status("Could not read that image — try a PNG or JPEG.");
+    }
+  });
+
+  const button = el("button", {
+    class: "portrait-slot",
+    title: portraits[key] ? "Change picture" : "Add a picture",
+    onclick: () => file.click(),
+  }, [emblemFor(key, "humanoid", { size: 52, portrait: portraits[key] })]);
+
+  return el("div", { class: "portrait-wrap" }, [
+    button,
+    file,
+    portraits[key]
+      ? el("button", {
+          class: "portrait-clear", title: "Remove picture", text: "×",
+          onclick: async () => { portraits = await removePortrait(key); render(); },
+        })
+      : null,
+  ]);
+}
+
 function renderCharacter(character: Character) {
   const head = el("div", { class: "char-head" }, [
+    renderPortrait(character),
     el("input", {
       class: "char-name", type: "text", value: character.name, "aria-label": "character name",
       oninput: (e: Event) => patch(character.id, { name: (e.target as HTMLInputElement).value }),
@@ -246,7 +291,7 @@ fileInput.addEventListener("change", async () => {
 
 async function boot() {
   document.body.dataset.theme = resolveTheme((await getSettings()).appearance);
-  [party, { rules }] = await Promise.all([getParty(), loadDataset()]);
+  [party, { rules }, portraits] = await Promise.all([getParty(), loadDataset(), getPortraits()]);
   render();
 }
 

@@ -108,6 +108,15 @@ ordinary text.
   plus proficiency for the level, with a weapon's finesse/ranged properties
   choosing the ability and a caster's class choosing their spell ability —
   and every one of them stays editable.
+- **A picture for every entry.** Each creature, item, spell and rule carries
+  an emblem: a glyph for what it is (its creature type, item category or
+  spell school) over a tint and corner mark derived from a hash of its id,
+  so entries stay individually recognisable and look the same every session.
+  Nothing is downloaded — see *Why the pictures are drawn, not shipped*
+  below. Any entry (and any party member) can take **your own picture**
+  instead: open it, press *Add picture*, and the file is squared, shrunk to
+  160px and kept in local storage on that machine. *Remove* puts the emblem
+  back.
 - **Party roster** (a full tab, linked from settings): characters with
   stats, plus spells/actions/items picked from the SRD **or typed in as free
   text** for homebrew. Everything autosaves as you type — there is no save
@@ -238,11 +247,15 @@ pack can be switched off in settings.
 
 | Pack | Licence | What it adds |
 | --- | --- | --- |
-| **D&D SRD 5.1** © Wizards of the Coast | CC BY 4.0 | 1,553 entries — rules, spells, monsters, items, classes |
-| **Level Up: Advanced 5e** (EN Publishing) | CC BY 4.0 | 371 spells, 546 magic items, 59 feats, 16 backgrounds |
-| **Black Flag SRD** (Kobold Press) | ORC | 360 monsters |
+| **D&D SRD 5.1** © Wizards of the Coast | CC BY 4.0 | 1,553 entries — 78 rules, 319 spells, 334 monsters, 403 items, 419 class features |
+| **Level Up: Advanced 5e** (EN Publishing) | CC BY 4.0 | 435 entries — 306 magic items, 71 feats & backgrounds, 58 spells |
+| **Black Flag SRD** (Kobold Press) | ORC | 71 monsters |
 
-2,902 entries in total.
+2,059 entries in total. The packs overlap heavily — all three restate the
+same core spells and creatures — so the build drops an entry when an
+earlier-priority pack already has one with the same title in the same
+group, keeping the SRD's wording as the canonical one. Roughly 800 entries
+are duplicates removed this way.
 
 Open5e also carries a large amount of **OGL 1.0a** material (Tome of Beasts,
 Deep Magic, Creature Codex and more). It is deliberately *not* bundled:
@@ -256,6 +269,37 @@ speeds, ability scores with modifiers, saves, skills, immunities, senses,
 languages, and traits/actions/reactions/legendary actions parsed into
 separate collapsible sections, with attack bonuses and save DCs pulled out
 of the prose.
+
+## Why the pictures are drawn, not shipped
+
+There is no art set that can legally and offline be bundled for two thousand
+entries, so the extension draws its own.
+
+- The **SRD 5.1** is text. It grants no artwork at all.
+- **5e-bits/5e-database** stores only remote URLs (`/api/images/monsters/…`).
+  Following one is a network request at runtime, which this extension never
+  makes, and the images themselves are not covered by the data's licence.
+- **Open5e** ships a handful of illustrations, but its "Modified MIT
+  License" reads *"excepting artistic images included in this repository"* —
+  they are explicitly carved out, so they must not be redistributed here.
+
+Hence `src/ui/emblem.ts`: 45 single-stroke glyphs in the same geometric
+idiom as the interface icons, one per creature type, item category and spell
+school, placed over a tint and corner mark chosen by an FNV hash of the
+entry's id. Every entry resolves to a real glyph — no entry falls through to
+a generic placeholder — and the same entry looks the same every session.
+
+`src/portraits.ts` is the escape hatch: your own image, squared and
+downscaled to a 160px JPEG (~6 KB), stored in `chrome.storage.local` under
+`rulesOverlay:portraits`, capped at 400 entries so it stays inside the
+quota. It never leaves the machine, and it is keyed by rule id — or
+`character:<id>` for party members, who are nobody's catalogue entry.
+
+One caveat: images a content script adds to the page are still subject to
+*that page's* Content-Security-Policy, so a site with a strict `img-src` can
+block your uploaded portraits inside the hotkey overlay. The emblems are
+inline SVG and always render, and the side panel is an extension page of its
+own, so neither is affected.
 
 ## Design
 
