@@ -47,6 +47,7 @@ export const ICONS = {
   minus: ["M5 12h14"],
   trash: ["M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"],
   lock: ["M5 11h14v10H5z", "M8 11V7a4 4 0 0 1 8 0v4"],
+  undo: ["M4 9h11a5 5 0 0 1 0 10h-6", "M8 5 4 9l4 4"],
   pencil: ["M4 20h4L20 8l-4-4L4 16Z", "M14 6l4 4"],
 } as const;
 

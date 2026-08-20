@@ -4,6 +4,8 @@
  * than duplicates, that a v1 party file still loads, and that hostile JSON is
  * coerced rather than trusted. Run with `npm test`.
  */
+import type { Rule } from "../src/types.js";
+
 const store: Record<string, unknown> = {};
 (globalThis as any).chrome = {
   storage: {
@@ -124,3 +126,105 @@ assert(isDead(body({ isPlayer: true, hp: 0, deathSaves: { successes: 0, failures
   "three failed death saves is death");
 assert(!canAct(body({ isPlayer: true, hp: 5, deathSaves: { successes: 0, failures: 3 } })),
   "death sticks even if hit points come back without clearing the tally");
+
+// --- duplicates are numbered from one, and renames are respected
+const { nameForCopy } = await import("../src/combat.js");
+const beast = (id: string, name: string) => body({ id, name, ruleId: "monster-badger" });
+
+assert(nameForCopy([], "monster-badger", "Badger").name === "Badger",
+  "the first of a kind is unnumbered");
+
+const second = nameForCopy([beast("a", "Badger")], "monster-badger", "Badger");
+assert(second.name === "Badger 2", "the second copy is numbered 2");
+assert(second.renameFirst?.name === "Badger 1",
+  "adding a second retroactively numbers the first");
+
+const third = nameForCopy(
+  [beast("a", "Badger 1"), beast("b", "Badger 2")], "monster-badger", "Badger");
+assert(third.name === "Badger 3", "the third copy continues the run");
+assert(!third.renameFirst, "nothing is renamed once the run is already numbered");
+
+const afterRename = nameForCopy(
+  [beast("a", "Alpha Badger"), beast("b", "Badger 2")], "monster-badger", "Badger");
+assert(afterRename.name === "Badger 3" && !afterRename.renameFirst,
+  "a name the DM chose is never overwritten");
+
+assert(nameForCopy([beast("a", "Badger (CR 2)")], "monster-badger", "Badger (CR 2)").name
+  === "Badger (CR 2) 2", "a scaled name with regex characters still numbers cleanly");
+
+// --- someone joining a running fight takes their place in the order
+const { insertIntoOrder } = await import("../src/combat.js");
+const fight = (over: Record<string, unknown> = {}) => ({
+  round: 1, turn: 1, started: true, dmOverride: false, log: [],
+  combatants: [
+    body({ id: "a", name: "A", initiative: 20 }),
+    body({ id: "b", name: "B", initiative: 15 }),
+    body({ id: "c", name: "C", initiative: 5 }),
+  ],
+  order: ["a", "b", "c"],
+  ...over,
+}) as Parameters<typeof insertIntoOrder>[0];
+
+const middle = insertIntoOrder(fight(), body({ id: "n", name: "N", initiative: 10 }));
+assert(middle.order.join() === "a,b,n,c", "a latecomer slots in by initiative");
+assert(middle.turn === 1, "someone joining below the pointer leaves the active turn alone");
+
+const top = insertIntoOrder(fight(), body({ id: "n", name: "N", initiative: 25 }));
+assert(top.order.join() === "n,a,b,c", "the highest roll goes first in the order");
+assert(top.turn === 2, "joining above the pointer shifts it, so the same combatant stays active");
+
+const last = insertIntoOrder(fight(), body({ id: "n", name: "N", initiative: 1 }));
+assert(last.order.join() === "a,b,c,n", "the lowest roll goes last");
+
+const notStarted = insertIntoOrder(fight({ started: false, order: [] }),
+  body({ id: "n", name: "N", initiative: 10 }));
+assert(!notStarted.order.length, "before initiative is rolled there is no order to join");
+
+// --- encounter difficulty, against the stated approximation
+const { rateEncounter } = await import("../src/combat.js");
+const party4x5 = [1, 2, 3, 4].map(() => ({ level: 5 }));
+const band = (enemies: { cr: number; xp: number }[]) => rateEncounter(enemies, party4x5)!.band;
+
+assert(rateEncounter([], party4x5) === null, "no enemies means no rating");
+assert(rateEncounter([{ cr: 5, xp: 1800 }], []) === null, "no party means no rating");
+assert(band([{ cr: 0.25, xp: 50 }]) === "trivial", "one goblin against four fifth-level heroes is trivial");
+assert(band(Array(4).fill({ cr: 0.25, xp: 50 })) === "easy", "four goblins are easy");
+assert(band([{ cr: 5, xp: 1800 }]) === "moderate", "a lone equal-level threat is moderate");
+assert(band([{ cr: 10, xp: 5900 }]) === "deadly", "twice the party's weight is deadly");
+assert(rateEncounter(Array(3).fill({ cr: 1, xp: 200 }), party4x5)!.xp === 600,
+  "XP is summed straight off the stat blocks");
+assert(band(Array(8).fill({ cr: 0.25, xp: 50 })) === "moderate",
+  "numbers count for something: eight goblins outrank four");
+
+// --- questions answered from the fight in progress
+const { answerFromCombat } = await import("../src/combat-answers.js");
+const ruleMap = new Map<string, Rule>([
+  ["prone", { id: "prone", title: "Prone", group: "rules", category: "condition", body: "" }],
+  ["grappled", { id: "grappled", title: "Grappled", group: "rules", category: "condition", body: "" }],
+]);
+const dave = body({
+  id: "d", name: "Dave", isPlayer: true, level: 5, speed: 30,
+  actions: [{ id: "s1", name: "Fireball", kind: "spell", cost: "action", ruleId: "spell-fireball" }],
+});
+const running = (over: Record<string, unknown> = {}) => ({
+  round: 1, turn: 0, started: true, dmOverride: false, log: [],
+  combatants: [dave], order: ["d"], ...over,
+}) as Parameters<typeof answerFromCombat>[1];
+
+const ask = (q: string, subject = dave, enc = running()) =>
+  answerFromCombat(q, enc, subject, ruleMap);
+
+assert(ask("fireball") === null, "a plain lookup is not treated as a question");
+assert(answerFromCombat("can I move", running({ started: false }), dave, ruleMap) === null,
+  "no verdict before the fight has started");
+assert(ask("can I move")?.verdict === "yes", "a mobile character can move");
+assert(ask("can I move", body({ ...dave, conditions: ["grappled"] }))?.verdict === "no",
+  "grappled drops speed to 0, so the answer is no");
+assert(ask("can Dave attack")?.subject.name === "Dave", "a name in the question picks the subject");
+assert(ask("can I attack", body({ ...dave, actionUsed: true }))?.verdict === "no",
+  "an action already spent means no attack");
+assert(ask("do I have my reaction")?.verdict === "yes", "an unspent reaction is available");
+assert(ask("can I cast fireball")?.headline.includes("Fireball"),
+  "a spell on the sheet is recognised by name");
+assert(ask("can I cast fireball", body({ ...dave, conditions: ["prone"], hp: 0 }))?.verdict === "no",
+  "a character at 0 hit points cannot cast");

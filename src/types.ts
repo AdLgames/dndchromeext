@@ -223,7 +223,7 @@ export type CombatEvent = {
   at: number;
   text: string;
   detail?: string;
-  kind: "attack" | "damage" | "heal" | "save" | "note";
+  kind: "attack" | "damage" | "heal" | "save" | "condition" | "note";
 };
 
 export type Encounter = {

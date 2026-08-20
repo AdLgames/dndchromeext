@@ -5,6 +5,14 @@ import type {
 } from "./types";
 
 const ENCOUNTER_KEY = "rulesOverlay:encounter";
+const UNDO_KEY = "rulesOverlay:encounterUndo";
+
+/**
+ * How many steps back the tracker remembers. Deep enough to walk out of a
+ * mistaken run of clicks, shallow enough that a dozen encounter snapshots
+ * stay well inside the storage quota.
+ */
+export const UNDO_MAX = 12;
 const LOG_MAX = 40;
 
 export const EMPTY_ENCOUNTER: Encounter = {
@@ -184,6 +192,35 @@ export function actionsFromCharacter(character: Character, rules: Map<string, Ru
   return actions;
 }
 
+/**
+ * Names a new copy of a creature, and says whether the first one needs
+ * renaming to match. Four badgers should read "Badger 1..4", not "Badger"
+ * followed by "Badger 2" — so the first only gains its number at the moment
+ * a second arrives, and only if the DM has not already named it something
+ * of their own.
+ */
+export function nameForCopy(
+  existing: Combatant[],
+  ruleId: string,
+  baseName: string
+): { name: string; renameFirst?: { id: string; name: string } } {
+  const siblings = existing.filter((c) => c.ruleId === ruleId);
+  if (!siblings.length) return { name: baseName };
+
+  const numbered = new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} (\\d+)$`);
+  const highest = siblings.reduce((max, c) => {
+    const hit = numbered.exec(c.name);
+    return hit ? Math.max(max, Number(hit[1])) : max;
+  }, 0);
+
+  // The lone original still carrying the bare name becomes number one.
+  const untouched = siblings.find((c) => c.name === baseName);
+  return {
+    name: `${baseName} ${Math.max(highest, siblings.length) + 1}`,
+    ...(untouched ? { renameFirst: { id: untouched.id, name: `${baseName} 1` } } : {}),
+  };
+}
+
 export function combatantFromMonster(rule: Rule, suffix?: string): Combatant {
   const m = rule.monster;
   const base = blank(suffix ? `${rule.title} ${suffix}` : rule.title);
@@ -310,6 +347,82 @@ export function attackShape(
 }
 
 /** Initiative order: highest first, ties broken stably by name. */
+/**
+ * Slots a latecomer into a fight that is already running. Their initiative
+ * decides where they land, and the pointer shifts with them so whoever is
+ * mid-turn stays mid-turn — inserting someone above the current slot means
+ * they act next round, which is the ordinary ruling.
+ *
+ * Before initiative is rolled there is no stored order to join: the display
+ * sorts by initiative on its own, so this leaves the encounter alone.
+ */
+export function insertIntoOrder(encounter: Encounter, joiner: Combatant): Encounter {
+  if (!encounter.started || !encounter.order.length) return encounter;
+
+  const byId = new Map(encounter.combatants.map((c) => [c.id, c]));
+  const goesBefore = (other: Combatant) =>
+    joiner.initiative > other.initiative
+    || (joiner.initiative === other.initiative
+        && abilityMod(joiner.abilities.dex) > abilityMod(other.abilities.dex));
+
+  const found = encounter.order.findIndex((id) => {
+    const other = byId.get(id);
+    return other ? goesBefore(other) : false;
+  });
+  const at = found === -1 ? encounter.order.length : found;
+
+  return {
+    ...encounter,
+    order: [...encounter.order.slice(0, at), joiner.id, ...encounter.order.slice(at)],
+    turn: at <= encounter.turn ? encounter.turn + 1 : encounter.turn,
+  };
+}
+
+export type EncounterBand = "trivial" | "easy" | "moderate" | "hard" | "deadly";
+
+export type EncounterRating = {
+  enemies: number;
+  xp: number;
+  ratio: number;
+  band: EncounterBand;
+};
+
+const BANDS: [number, EncounterBand][] = [
+  [0.25, "trivial"], [0.6, "easy"], [1.1, "moderate"], [1.7, "hard"],
+];
+
+/**
+ * Rates a fight against the party in it.
+ *
+ * This is the extension's own approximation, not an official rule: the SRD
+ * carries stat blocks and their XP but none of the encounter-building
+ * tables, so there is nothing openly licensed to implement. The sum here is
+ * deliberately simple enough to state outright — one challenge rating per
+ * four character levels is an even fight, and numbers count for something on
+ * top of that — so a DM can see what it is doing and discount it.
+ *
+ * XP is the real figure off the stat blocks, and is shown alongside for
+ * anyone who wants to do the maths their own way.
+ */
+export function rateEncounter(
+  enemies: { cr: number; xp: number }[],
+  party: { level: number }[]
+): EncounterRating | null {
+  if (!enemies.length || !party.length) return null;
+
+  const baseline = party.reduce((sum, p) => sum + Math.max(1, p.level), 0) / 4;
+  const crowd = Math.min(2, 1 + 0.15 * (enemies.length - 1));
+  const threat = enemies.reduce((sum, e) => sum + e.cr, 0) * crowd;
+  const ratio = baseline ? threat / baseline : 0;
+
+  return {
+    enemies: enemies.length,
+    xp: enemies.reduce((sum, e) => sum + e.xp, 0),
+    ratio,
+    band: BANDS.find(([limit]) => ratio < limit)?.[1] ?? "deadly",
+  };
+}
+
 export function ordered(encounter: Encounter): Combatant[] {
   if (encounter.started && encounter.order.length) {
     const byId = new Map(encounter.combatants.map((c) => [c.id, c]));
@@ -538,6 +651,32 @@ export async function saveEncounter(encounter: Encounter): Promise<void> {
   // a rolled save, a clicked pip, or an encounter saved before this existed.
   const combatants = encounter.combatants.map(settleDeath);
   await chrome.storage.local.set({ [ENCOUNTER_KEY]: { ...encounter, combatants } });
+}
+
+/**
+ * The undo stack is persisted rather than held in memory, so it survives the
+ * panel closing and is shared between the overlay and the side panel — the
+ * DM should not lose their way back just because they switched surface.
+ */
+export async function getUndoStack(): Promise<Encounter[]> {
+  const stored = await chrome.storage.local.get(UNDO_KEY);
+  const saved = stored[UNDO_KEY] as Encounter[] | undefined;
+  return Array.isArray(saved) ? saved : [];
+}
+
+export async function saveUndoStack(stack: Encounter[]): Promise<void> {
+  await chrome.storage.local.set({ [UNDO_KEY]: stack.slice(-UNDO_MAX) });
+}
+
+export function onUndoChanged(fn: (stack: Encounter[]) => void): void {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[UNDO_KEY]) fn(changes[UNDO_KEY].newValue ?? []);
+  });
+}
+
+/** Two states are the same step if nothing a DM would notice differs. */
+export function sameEncounter(a: Encounter, b: Encounter): boolean {
+  return JSON.stringify({ ...a, log: a.log.length }) === JSON.stringify({ ...b, log: b.log.length });
 }
 
 export function onEncounterChanged(fn: (encounter: Encounter) => void): void {

@@ -57,6 +57,17 @@ ordinary text.
   **walkthrough** that steps through dismounting, the DC 10 Dex save, fall
   damage, going prone, and the concentration check, with the dice for each
   step attached.
+- **A dice tray** behind the dice icon: d4 through d100, a box for anything
+  else (`2d6 + 3`), and the roll history — every roll the panel makes
+  anywhere, attacks and saves included, with *Again* to repeat one. The last
+  roll still sits above the footer, and clicking it opens the tray.
+- **Ask about the fight in progress.** With an encounter running, "can I
+  move", "can Dave attack", "do I have my reaction" get answered from the
+  encounter itself — conditions, speed already spent, action economy,
+  concentration — with the reasoning shown, above the usual ranked rules.
+  It understands a deliberately small set of questions; anything it doesn't
+  recognise just falls through to the rules lookup it would have shown
+  anyway.
 - **Roll anything.** Every dice expression in the text is a button:
   `1d10 + 2` in a monster's bite, `8d6` in Fireball, `2d4 + 2` on a healing
   potion. Fall damage asks how far you fell and rolls the right number of
@@ -86,7 +97,10 @@ ordinary text.
      "how is my side doing" stops being a scan through interleaved rows.
   1. **Roll initiative for all** rolls d20 + Dex for everyone at once and
      freezes the turn order (stored, so editing a number later doesn't
-     silently reshuffle whose turn it is).
+     silently reshuffle whose turn it is). Anyone who **joins a fight already
+     in progress** rolls their own initiative and is slotted into the running
+     order at the right place — reinforcements get a turn instead of sitting
+     at the bottom of the list where their turn never comes round.
   2. Only the combatant whose turn it is can act. Their action, bonus
      action, reaction and remaining movement show in the turn banner and are
      spent as they're used, refreshing when their turn comes round again.
@@ -114,7 +128,31 @@ ordinary text.
 
   Damage taken while concentrating immediately rolls the Constitution save
   at DC 10 or half the damage. Death saves roll and tally themselves. A
-  combat log records the arithmetic so the table can check it.
+  combat log records the arithmetic so the table can check it, filtered by
+  **attacks / damage / healing / saves / conditions / notes** — conditions
+  are logged too, so a sudden disadvantage three turns on has a visible
+  cause.
+
+  **Undo** walks back up to twelve steps, from the round bar. It covers
+  everything the tracker does — damage, healing, conditions, turn changes,
+  adding and removing combatants — and is persisted, so it survives closing
+  the panel and is shared between the overlay and the side panel. Ending an
+  encounter clears it, since undoing into a fight you deliberately cleared
+  away is not a kindness.
+
+  **Names are editable**: click any combatant to rename them. Duplicates are
+  numbered as a run — adding a second Badger renames the first to *Badger 1*
+  — and a name you chose yourself is never overwritten. The **+** on an
+  enemy's row adds another of the same creature, which is how encounters
+  actually get built.
+
+  A **difficulty band** — trivial to deadly — sits above the list with the
+  enemy count and their total XP. The XP is the real figure off the stat
+  blocks; the band is the extension's **own approximation**, because the SRD
+  carries stat blocks but none of the encounter-building tables, so there is
+  nothing openly licensed to implement. It weighs one challenge rating per
+  four character levels, plus a little for numbers, and the panel says as
+  much when you ask it.
 
   Numbers for party members are derived the way 5e does — ability modifier
   plus proficiency for the level, with a weapon's finesse/ranged properties

@@ -102,6 +102,12 @@ export async function pushRoll(detail: RollDetail): Promise<RollDetail[]> {
   return log;
 }
 
+export function onRollLogChanged(fn: (log: RollDetail[]) => void): void {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[LOG_KEY]) fn(changes[LOG_KEY].newValue ?? []);
+  });
+}
+
 export async function clearRollLog(): Promise<void> {
   await chrome.storage.local.remove(LOG_KEY);
 }

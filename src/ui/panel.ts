@@ -1,16 +1,23 @@
 import {
   abilityMod, activeCombatant, advance, applyDamage, applyHealing, canAct, combatantBlank,
   combatantFromCharacter, combatantFromMonster, effectiveSpeed, EMPTY_ENCOUNTER, getEncounter,
-  isDead, logEvent, onEncounterChanged, ordered, resolveAction, rollInitiativeForAll, rollSave,
+  getUndoStack, insertIntoOrder, isDead, logEvent, nameForCopy, onEncounterChanged, onUndoChanged,
+  ordered,
+  rateEncounter, resolveAction, rollInitiativeForAll, rollSave, sameEncounter, saveUndoStack,
+  UNDO_MAX, type EncounterRating,
   settleDeath,
   saveEncounter, TRACKED_CONDITIONS,
 } from "../combat";
+import { answerFromCombat } from "../combat-answers";
 import { loadDataset } from "../data/load";
 import {
   describeHomebrew, getHomebrew, HOMEBREW_SOURCE, HOMEBREW_SOURCE_ID, newHomebrewId,
   onHomebrewChanged, removeHomebrew, upsertHomebrew,
 } from "../homebrew";
-import { clearRollLog, formatRoll, getRollLog, pushRoll, roll, rollRepeated, type RollDetail } from "../dice";
+import {
+  clearRollLog, formatRoll, getRollLog, isDiceExpression, onRollLogChanged, pushRoll, roll,
+  rollRepeated, type RollDetail,
+} from "../dice";
 import { getParty, onPartyChanged } from "../party";
 import {
   characterPortraitKey, fileToDataUrl, getPortraits, onPortraitsChanged, removePortrait,
@@ -31,7 +38,8 @@ import {
   GROUP_LABELS, RULE_GROUPS,
   type AbilityScores, type Character, type Combatant, type CombatAction, type Encounter, type Flow,
   OPEN_TAB_MESSAGE, SRD_SOURCE_ID,
-  type NamedEntry, type QuickAction, type Rule, type RuleGroup, type RuntimeMessage,
+  type CombatEvent, type NamedEntry, type QuickAction, type Rule, type RuleGroup,
+  type RuntimeMessage,
   type SourceRecord,
 } from "../types";
 import { el, highlighted, icon, prose } from "./dom";
@@ -44,9 +52,22 @@ const GROUP_ICONS: Record<RuleGroup, "bestiary" | "spells" | "rules" | "items" |
   bestiary: "bestiary", spells: "spells", rules: "rules", items: "items", classes: "classes",
 };
 
+const LOG_FILTERS: { kind: CombatEvent["kind"] | "all"; label: string }[] = [
+  { kind: "all", label: "All" },
+  { kind: "attack", label: "Attacks" },
+  { kind: "damage", label: "Damage" },
+  { kind: "heal", label: "Healing" },
+  { kind: "save", label: "Saves" },
+  { kind: "condition", label: "Conditions" },
+  { kind: "note", label: "Notes" },
+];
+
+/** The seven solids a table actually owns. */
+const DICE_FACES = [4, 6, 8, 10, 12, 20, 100];
+
 const ABILITY_KEYS: (keyof AbilityScores)[] = ["str", "dex", "con", "int", "wis", "cha"];
 
-type View = "browse" | "results" | "detail" | "pinned" | "settings" | "flow" | "catalog";
+type View = "browse" | "results" | "detail" | "pinned" | "settings" | "flow" | "catalog" | "dice";
 type Tab = "search" | "homebrew" | "combat";
 
 type SortKey = "name" | "cr" | "ac" | "hp" | "level";
@@ -126,12 +147,18 @@ export class Panel {
   private explain = false;
   private flow: Flow | null = null;
   private lastRoll: RollDetail | null = null;
+  private rollLog: RollDetail[] = [];
+  private diceExpr = "";
+  private logFilter: CombatEvent["kind"] | "all" = "all";
   private encounter: Encounter = EMPTY_ENCOUNTER;
   private party: Character[] = [];
   private combatPicker = false;
   private attackFrom: string | null = null;
   private attackMode: "normal" | "adv" | "dis" = "normal";
   private hpDelta = new Map<string, number>();
+  private renamingId: string | null = null;
+  private undoStack: Encounter[] = [];
+  private xpTable: Map<string, number> | null = null;
   private input: HTMLInputElement | null = null;
   private focusMode: "none" | "caret" | "select" = "none";
   private caret = 0;
@@ -145,10 +172,10 @@ export class Panel {
   }
 
   private async init() {
-    const [{ rules, aliases, flows, sources }, recency, settings, pins, encounter, party, log, portraits, homebrew] =
+    const [{ rules, aliases, flows, sources }, recency, settings, pins, encounter, party, log, portraits, homebrew, undoStack] =
       await Promise.all([
         loadDataset(), getRecency(), getSettings(), getPins(), getEncounter(), getParty(), getRollLog(),
-        getPortraits(), getHomebrew(),
+        getPortraits(), getHomebrew(), getUndoStack(),
       ]);
     this.bundled = rules;
     this.flows = flows;
@@ -159,6 +186,7 @@ export class Panel {
     this.sources = [...sources, HOMEBREW_SOURCE];
     this.sourcesById = new Map(this.sources.map((s) => [s.id, s]));
     this.setHomebrew(homebrew);
+    this.undoStack = undoStack;
     this.aliasIndex = buildAliasIndex(aliases);
     this.recency = recency;
     this.settings = settings;
@@ -166,6 +194,7 @@ export class Panel {
     this.encounter = encounter;
     this.party = party;
     this.lastRoll = log[0] ?? null;
+    this.rollLog = log;
     this.portraits = portraits;
 
     onSettingsChanged((next) => { this.settings = next; this.applyTheme(); this.render(); });
@@ -177,6 +206,8 @@ export class Panel {
     onPartyChanged((next) => { this.party = next; this.render(); });
     onPortraitsChanged((next) => { this.portraits = next; this.render(); });
     onHomebrewChanged((next) => { this.setHomebrew(next); this.render(); });
+    onUndoChanged((next) => { this.undoStack = next; this.render(); });
+    onRollLogChanged((next) => { this.rollLog = next; this.render(); });
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.applyTheme());
 
     this.applyTheme();
@@ -301,6 +332,7 @@ export class Panel {
 
   private showRoll(detail: RollDetail) {
     this.lastRoll = detail;
+    this.rollLog = [detail, ...this.rollLog].slice(0, 40);
     void pushRoll(detail);
     this.render();
   }
@@ -348,10 +380,144 @@ export class Panel {
     this.render();
   }
 
-  private async updateEncounter(next: Encounter) {
+  /**
+   * Every change to the fight goes through here, which makes it the one
+   * place undo has to hook. `undoable: false` is for the undo itself and for
+   * ending an encounter, neither of which should leave a step to walk back.
+   */
+  private async updateEncounter(next: Encounter, { undoable = true } = {}) {
+    if (undoable && !sameEncounter(this.encounter, next)) {
+      this.undoStack = [...this.undoStack, this.encounter].slice(-UNDO_MAX);
+      void saveUndoStack(this.undoStack);
+    }
     this.encounter = next;
     await saveEncounter(next);
     this.render();
+  }
+
+  private async undo() {
+    const previous = this.undoStack[this.undoStack.length - 1];
+    if (!previous) return;
+    this.undoStack = this.undoStack.slice(0, -1);
+    void saveUndoStack(this.undoStack);
+    // Undoing while a rename box is open would commit it straight back.
+    this.renamingId = null;
+    await this.updateEncounter(previous, { undoable: false });
+  }
+
+  /**
+   * Another of the same creature. Building an encounter is mostly "and three
+   * more of those", so it happens from the row rather than by going back to
+   * the catalogue each time.
+   */
+  private duplicateCombatant(c: Combatant) {
+    const rule = c.ruleId ? this.rulesById.get(c.ruleId) : undefined;
+    if (!rule?.monster) return;
+
+    // Strip any number off the source's name so copies of "Goblin 2" carry
+    // on the Goblin run rather than starting a "Goblin 2" one.
+    const baseName = c.name.replace(/ \d+$/, "");
+    const { name, renameFirst } = nameForCopy(this.encounter.combatants, rule.id, baseName);
+
+    const combatant = combatantFromMonster(rule);
+    combatant.name = name;
+    combatant.ac = c.ac;
+    combatant.maxHp = c.maxHp;
+    combatant.hp = c.maxHp;
+    combatant.initiative = roll("1d20").total + abilityMod(c.abilities.dex);
+
+    this.addCombatant(combatant, this.encounter.combatants.map((x) =>
+      renameFirst && x.id === renameFirst.id ? { ...x, name: renameFirst.name } : x
+    ));
+  }
+
+  /**
+   * What a creature is worth, and how tough it is. Both come off the stat
+   * block; where a pack ships a monster without an XP figure, the value is
+   * taken from the other bundled creatures at that challenge rating rather
+   * than from any table we would have to supply ourselves.
+   */
+  private xpByCr(): Map<string, number> {
+    if (!this.xpTable) {
+      const counts = new Map<string, Map<number, number>>();
+      for (const rule of this.bundled) {
+        const m = rule.monster;
+        if (!m?.xp) continue;
+        const seen = counts.get(m.cr) ?? new Map<number, number>();
+        seen.set(m.xp, (seen.get(m.xp) ?? 0) + 1);
+        counts.set(m.cr, seen);
+      }
+      this.xpTable = new Map(
+        [...counts].map(([cr, seen]) => [cr, [...seen].sort((a, b) => b[1] - a[1])[0][0]])
+      );
+    }
+    return this.xpTable;
+  }
+
+  private threatOf(c: Combatant): { cr: number; xp: number } | null {
+    const stat = c.ruleId ? this.rulesById.get(c.ruleId)?.monster : undefined;
+    if (!stat) return null;
+    return { cr: crValue(stat.cr), xp: stat.xp || this.xpByCr().get(stat.cr) || 0 };
+  }
+
+  /** The fight as it currently stands, rated against the party in it. */
+  private rating(): EncounterRating | null {
+    const enemies = this.encounter.combatants
+      .filter((c) => !c.isPlayer && c.hp > 0)
+      .map((c) => this.threatOf(c))
+      .filter((t): t is { cr: number; xp: number } => !!t);
+
+    const party = this.encounter.combatants
+      .filter((c) => c.isPlayer)
+      .map((c) => ({ level: c.level ?? 1 }));
+
+    return rateEncounter(enemies, party);
+  }
+
+  /**
+   * The one way anyone joins a fight. Whoever arrives mid-combat rolls
+   * initiative like everyone else and takes their place in the running
+   * order, rather than being parked at the bottom of the list where their
+   * turn never comes round.
+   */
+  private addCombatant(combatant: Combatant, extra: Combatant[] = []) {
+    let next: Encounter = {
+      ...this.encounter,
+      combatants: [...extra.length ? extra : this.encounter.combatants, combatant],
+    };
+
+    if (this.encounter.started) {
+      next = insertIntoOrder(next, combatant);
+      next = logEvent(next, {
+        kind: "note",
+        text: `${combatant.name} joins the fight on initiative ${combatant.initiative}`,
+      });
+    }
+
+    this.combatPicker = false;
+    void this.updateEncounter(next);
+    this.tab = "combat";
+  }
+
+  /**
+   * Conditions change what every later roll does, so they belong in the log
+   * next to the rolls they explain — otherwise a sudden disadvantage three
+   * turns on has no visible cause.
+   */
+  private setCondition(c: Combatant, conditionId: string, on: boolean) {
+    if (on === c.conditions.includes(conditionId)) return;
+    const conditions = on
+      ? [...c.conditions, conditionId]
+      : c.conditions.filter((x) => x !== conditionId);
+    const name = this.rulesById.get(conditionId)?.title ?? conditionId;
+
+    void this.updateEncounter(logEvent({
+      ...this.encounter,
+      combatants: this.encounter.combatants.map((x) => (x.id === c.id ? { ...x, conditions } : x)),
+    }, {
+      kind: "condition",
+      text: `${c.name} ${on ? "is now" : "is no longer"} ${name.toLowerCase()}`,
+    }));
   }
 
   private patchCombatant(id: string, patch: Partial<Combatant>) {
@@ -451,6 +617,8 @@ export class Panel {
       panel.append(this.renderSubHeader("Settings"), this.renderSettings(), this.renderSettingsFoot());
     } else if (this.view === "pinned") {
       panel.append(this.renderSubHeader("Session"), this.renderPinned(), this.footer());
+    } else if (this.view === "dice") {
+      panel.append(this.renderSubHeader("Dice"), this.renderDice(), this.footer());
     } else if (this.view === "flow" && this.flow) {
       panel.append(this.renderSubHeader("Walkthrough"), this.renderFlow(this.flow));
       panel.append(this.rollStrip() ?? this.footer());
@@ -486,6 +654,89 @@ export class Panel {
     ]);
   }
 
+  /**
+   * The dice tray: the seven solids plus a free expression, over the roll
+   * history that was already being kept but never shown. Everything the
+   * panel rolls lands here, so the table can check a number after the fact.
+   */
+  private renderDice(): HTMLElement {
+    const body = el("div", { class: "body" });
+
+    body.append(el("div", { class: "dice-pad" },
+      DICE_FACES.map((sides) =>
+        el("button", {
+          class: "die-btn",
+          title: `Roll 1d${sides}`,
+          onclick: () => this.doRoll(`1d${sides}`),
+        }, [`d${sides}`])
+      )
+    ));
+
+    const input = el("input", {
+      class: "text-input", type: "text", value: this.diceExpr,
+      placeholder: "2d6 + 3, 4d6, 1d20 - 1…", "aria-label": "dice expression",
+      oninput: (e: Event) => { this.diceExpr = (e.target as HTMLInputElement).value; },
+    });
+    const rollTyped = () => {
+      const expr = this.diceExpr.trim();
+      if (!isDiceExpression(expr)) return;
+      this.diceExpr = "";
+      this.doRoll(expr);
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); rollTyped(); }
+      e.stopPropagation();
+    });
+
+    body.append(el("div", { class: "dice-custom" }, [
+      input,
+      el("button", { class: "mini-btn", text: "Roll", onclick: rollTyped }),
+    ]));
+
+    body.append(el("div", { class: "group-head" }, [
+      el("span", { text: "History" }),
+      this.rollLog.length
+        ? el("button", {
+            class: "link-btn", text: "Clear",
+            onclick: () => {
+              this.rollLog = [];
+              this.lastRoll = null;
+              void clearRollLog();
+              this.render();
+            },
+          })
+        : el("span", { text: "0" }),
+    ]));
+
+    if (!this.rollLog.length) {
+      body.append(el("div", {
+        class: "empty",
+        text: "No rolls yet. Every roll made anywhere in the panel — an attack, a save, a dice expression in a rule — is kept here.",
+      }));
+      return body;
+    }
+
+    for (const entry of this.rollLog) {
+      body.append(el("div", { class: "roll-row" }, [
+        el("span", {
+          class: `roll-row-total${entry.crit === "hit" ? " crit-hit" : entry.crit === "miss" ? " crit-miss" : ""}`,
+          text: String(entry.total),
+        }),
+        el("div", { class: "row-main" }, [
+          el("span", { class: "roll-row-label", text: entry.label ?? entry.expr }),
+          el("span", { class: "roll-row-detail", text: `${entry.expr} ${formatRoll(entry)}` }),
+        ]),
+        el("button", {
+          class: "mini-btn", text: "Again",
+          title: `Roll ${entry.expr} again`,
+          onclick: () => this.doRoll(entry.expr, entry.label),
+        }),
+      ]));
+    }
+
+    return body;
+  }
+
   /** The last roll, shown as a persistent strip above the footer. */
   private rollStrip(): HTMLElement | null {
     const detail = this.lastRoll;
@@ -495,7 +746,11 @@ export class Panel {
         class: `roll-total${detail.crit === "hit" ? " crit-hit" : detail.crit === "miss" ? " crit-miss" : ""}`,
         text: String(detail.total),
       }),
-      el("div", { class: "roll-meta" }, [
+      el("button", {
+        class: "roll-meta",
+        title: "Open the dice tray",
+        onclick: () => { this.view = "dice"; this.render(); },
+      }, [
         el("span", { class: "roll-label", text: detail.label ?? detail.expr }),
         el("span", {
           class: "roll-detail",
@@ -532,12 +787,18 @@ export class Panel {
       onclick: () => { this.tab = "combat"; this.render(); },
     }, [icon("swords", 15)]);
 
+    const diceBtn = el("button", {
+      class: `icon-btn${this.view === "dice" ? " on" : ""}`,
+      title: "Dice tray",
+      onclick: () => { this.view = "dice"; this.render(); },
+    }, [icon("dice", 15)]);
+
     const settingsBtn = el("button", {
       class: "icon-btn", title: "Settings",
       onclick: () => { this.view = "settings"; this.render(); },
     }, [icon("settings", 15)]);
 
-    const kids: (HTMLElement | null)[] = [pinBtn, partyBtn, combatBtn, settingsBtn];
+    const kids: (HTMLElement | null)[] = [pinBtn, partyBtn, diceBtn, combatBtn, settingsBtn];
     if (this.opts.onClose) {
       kids.push(el("button", { class: "icon-btn", title: "Close", onclick: () => this.opts.onClose!() }, [icon("close", 15)]));
     }
@@ -663,6 +924,28 @@ export class Panel {
   private renderResults(): HTMLElement {
     const body = el("div", { class: "body" });
     const grouped = this.groupedMatches();
+
+    // With a fight running, a question about it gets answered from the
+    // encounter itself before the rules are listed. When it doesn't match
+    // anything the answerer knows, nothing appears and the ranked entries
+    // below are exactly what they always were.
+    const answer = answerFromCombat(
+      this.query, this.encounter, activeCombatant(this.encounter), this.rulesById
+    );
+    if (answer) {
+      body.append(el("div", { class: `verdict ${answer.verdict}` }, [
+        el("div", { class: "verdict-head" }, [
+          el("span", { class: "verdict-mark", text:
+            answer.verdict === "yes" ? "Yes" : answer.verdict === "no" ? "No" : "It depends" }),
+          el("span", { class: "verdict-line", text: answer.headline }),
+        ]),
+        ...answer.reasons.map((reason) => el("span", { class: "verdict-why", text: reason })),
+        el("button", {
+          class: "link-btn", text: "Open the tracker",
+          onclick: () => { this.tab = "combat"; this.render(); },
+        }),
+      ]));
+    }
 
     // A question like "I fall off my horse" gets the walkthrough offered
     // above the raw hits — that is the answer they actually wanted.
@@ -1073,20 +1356,16 @@ export class Panel {
     if (!rule.monster) { this.tab = "combat"; this.render(); return; }
 
     const scaled = scaleStatBlock(rule.monster, this.scaleDelta);
-    const existing = this.encounter.combatants.filter((c) => c.ruleId === rule.id).length;
-    const suffix = [
-      existing ? String(existing + 1) : "",
-      this.scaleDelta ? `(CR ${scaled.cr})` : "",
-    ].filter(Boolean).join(" ");
+    const baseName = this.scaleDelta ? `${rule.title} (CR ${scaled.cr})` : rule.title;
+    const { name, renameFirst } = nameForCopy(this.encounter.combatants, rule.id, baseName);
 
-    const combatant = combatantFromMonster({ ...rule, monster: scaled }, suffix || undefined);
+    const combatant = combatantFromMonster({ ...rule, monster: scaled });
+    combatant.name = name;
     combatant.initiative = roll("1d20").total + Math.floor((scaled.abilities.dex - 10) / 2);
 
-    void this.updateEncounter({
-      ...this.encounter,
-      combatants: [...this.encounter.combatants, combatant],
-    });
-    this.tab = "combat";
+    this.addCombatant(combatant, this.encounter.combatants.map((c) =>
+      renameFirst && c.id === renameFirst.id ? { ...c, name: renameFirst.name } : c
+    ));
   }
 
   /**
@@ -1566,6 +1845,14 @@ export class Panel {
       started ? el("button", {
         text: "End turn", onclick: () => void this.updateEncounter(advance(this.encounter, 1)),
       }) : null,
+      el("button", {
+        class: "undo-btn",
+        disabled: !this.undoStack.length,
+        title: this.undoStack.length
+          ? `Undo the last change (${this.undoStack.length} step${this.undoStack.length === 1 ? "" : "s"} back)`
+          : "Nothing to undo",
+        onclick: () => void this.undo(),
+      }, [icon("undo", 13), "Undo"]),
     ]));
 
     if (started && active) {
@@ -1615,10 +1902,31 @@ export class Panel {
         }, [icon("settings", 14), this.encounter.dmOverride ? "Turn order off" : "Turn order on"]),
         el("button", {
           class: "qa-btn",
-          onclick: () => void this.updateEncounter(EMPTY_ENCOUNTER),
+          onclick: () => {
+            if (!confirm("End the encounter? This clears the tracker and the undo history.")) return;
+            // A new fight starts clean: undoing back into the old one would
+            // resurrect combatants the DM has deliberately cleared away.
+            this.undoStack = [];
+            void saveUndoStack([]);
+            void this.updateEncounter(EMPTY_ENCOUNTER, { undoable: false });
+          },
         }, [icon("trash", 14), "End encounter"]),
       ]),
     ]));
+
+    const rating = this.rating();
+    if (rating) {
+      body.append(el("div", { class: `threat ${rating.band}` }, [
+        el("span", { class: "threat-band", text: rating.band }),
+        el("span", { class: "threat-detail", text:
+          `${rating.enemies} ${rating.enemies === 1 ? "enemy" : "enemies"} · ${rating.xp.toLocaleString()} XP` }),
+        el("button", {
+          class: "link-btn", text: "?",
+          title: "The extension's own rough guide. The SRD has stat blocks and their XP but no encounter-building tables, so there is nothing openly licensed to implement — this weighs one challenge rating per four character levels, plus a little for numbers.",
+          onclick: () => { this.query = "encounter difficulty"; this.tab = "search"; this.runSearch(); },
+        }),
+      ]));
+    }
 
     if (this.combatPicker) body.append(this.renderCombatPicker());
 
@@ -1657,11 +1965,29 @@ export class Panel {
     }
 
     if (this.encounter.log.length) {
+      const shown = this.logFilter === "all"
+        ? this.encounter.log
+        : this.encounter.log.filter((e) => e.kind === this.logFilter);
+
       body.append(el("div", { class: "group-head" }, [
         el("span", { text: "Combat log" }),
-        el("span", { text: String(this.encounter.log.length) }),
+        el("span", { text: `${shown.length}${this.logFilter === "all" ? "" : ` of ${this.encounter.log.length}`}` }),
       ]));
-      for (const event of this.encounter.log.slice(0, 12)) {
+
+      body.append(el("div", { class: "log-filters" }, LOG_FILTERS.map(({ kind, label }) =>
+        el("button", {
+          class: `chip${this.logFilter === kind ? " on" : ""}`,
+          // A filter that would show nothing is worse than no filter: it
+          // reads as a broken log rather than an empty category.
+          disabled: kind !== "all" && !this.encounter.log.some((e) => e.kind === kind),
+          onclick: () => { this.logFilter = kind; this.render(); },
+        }, [label])
+      )));
+
+      if (!shown.length) {
+        body.append(el("div", { class: "empty", text: "Nothing of that kind yet this fight." }));
+      }
+      for (const event of shown.slice(0, 12)) {
         body.append(el("div", { class: `log-line ${event.kind}` }, [
           el("span", { text: event.text }),
           event.detail ? el("span", { class: "roll-detail", text: event.detail }) : null,
@@ -1680,11 +2006,7 @@ export class Panel {
         onclick: () => {
           const combatant = combatantFromCharacter(character, this.rulesById);
           combatant.initiative = roll("1d20").total + Math.floor((character.abilities.dex - 10) / 2);
-          this.combatPicker = false;
-          void this.updateEncounter({
-            ...this.encounter,
-            combatants: [...this.encounter.combatants, combatant],
-          });
+          this.addCombatant(combatant);
         },
       }, [
         icon("classes", 14),
@@ -1697,11 +2019,9 @@ export class Panel {
       onclick: () => {
         const name = prompt("Name this combatant");
         if (!name) return;
-        this.combatPicker = false;
-        void this.updateEncounter({
-          ...this.encounter,
-          combatants: [...this.encounter.combatants, combatantBlank(name)],
-        });
+        const combatant = combatantBlank(name);
+        combatant.initiative = roll("1d20").total;
+        this.addCombatant(combatant);
       },
     }, [icon("plus", 14), "Blank combatant"]));
 
@@ -1971,6 +2291,35 @@ export class Panel {
     return el("div", { class: "attack-panel" }, rows);
   }
 
+  /**
+   * Renaming happens in place: four goblins are only useful once the DM can
+   * call one "the one with the horn". Committed on Enter or blur, abandoned
+   * on Escape — and it deliberately does not re-render while typing, so the
+   * caret stays put.
+   */
+  private renameField(c: Combatant): HTMLElement {
+    const input = el("input", {
+      class: "fighter-rename", type: "text", value: c.name, "aria-label": `rename ${c.name}`,
+    });
+
+    const commit = () => {
+      if (this.renamingId !== c.id) return;
+      this.renamingId = null;
+      const name = input.value.trim();
+      if (name && name !== c.name) this.patchCombatant(c.id, { name });
+      else this.render();
+    };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commit(); }
+      if (e.key === "Escape") { e.preventDefault(); this.renamingId = null; this.render(); }
+      e.stopPropagation();
+    });
+    input.addEventListener("blur", commit);
+    queueMicrotask(() => { input.focus(); input.select(); });
+    return input;
+  }
+
   private renderCombatant(c: Combatant, isActive: boolean, index: number): HTMLElement {
     const down = c.hp <= 0;
     const dead = isDead(c);
@@ -1990,12 +2339,21 @@ export class Panel {
         : null,
       this.fighterPicture(c, 26),
       el("span", { class: "fighter-init", text: String(c.initiative) }),
-      el("span", { class: `fighter-name${dead ? " dead" : ""}`, text: c.name }),
+      this.renamingId === c.id ? this.renameField(c) : el("button", {
+        class: `fighter-name${dead ? " dead" : ""}`,
+        title: "Rename",
+        onclick: () => { this.renamingId = c.id; this.render(); },
+      }, [c.name]),
       dead ? el("span", { class: "fighter-dead", text: "(deceased)" }) : null,
       el("span", { class: `fighter-tag ${c.isPlayer ? "ally" : "foe"}`, text: c.isPlayer ? "PC" : "Enemy" }),
+      c.ruleId ? el("button", {
+        class: "icon-btn", title: `Add another ${c.name}`,
+        style: "margin-left:auto",
+        onclick: () => this.duplicateCombatant(c),
+      }, [icon("plus", 13)]) : null,
       el("button", {
         class: "icon-btn", title: "Remove",
-        style: "margin-left:auto",
+        style: c.ruleId ? "" : "margin-left:auto",
         onclick: () => void this.updateEncounter({
           ...this.encounter,
           combatants: this.encounter.combatants.filter((x) => x.id !== c.id),
@@ -2190,7 +2548,7 @@ export class Panel {
           class: "cond-chip",
           title: "Remove condition",
           text: this.rulesById.get(cid)?.title ?? cid,
-          onclick: () => this.patchCombatant(c.id, { conditions: c.conditions.filter((x) => x !== cid) }),
+          onclick: () => this.setCondition(c, cid, false),
         })
       ),
       el("select", {
@@ -2199,9 +2557,7 @@ export class Panel {
         onchange: (e: Event) => {
           const select = e.target as HTMLSelectElement;
           if (!select.value) return;
-          if (!c.conditions.includes(select.value)) {
-            this.patchCombatant(c.id, { conditions: [...c.conditions, select.value] });
-          }
+          if (select.value) this.setCondition(c, select.value, true);
           select.value = "";
         },
       }, [
