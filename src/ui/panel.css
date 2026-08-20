@@ -1,5 +1,17 @@
 /* Component layer shared by the side panel and the in-page overlay. */
 
+/*
+ * Both surfaces put .ro-root on the box that owns the panel's width — the
+ * overlay's frame, and the side panel's body — so the narrow-width rules
+ * below key off a container query rather than the viewport. A media query
+ * would be wrong for the overlay, whose frame is a fixed 420px inside a
+ * full-size page, and only accidentally right for the side panel.
+ */
+.ro-root {
+  container-type: inline-size;
+  container-name: panel;
+}
+
 .panel {
   display: flex;
   flex-direction: column;
@@ -36,6 +48,11 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   white-space: nowrap;
+  /* Without these the title's min-content width pushed the header buttons
+     off the right edge instead of giving way to them. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .brand-sub {
@@ -52,6 +69,30 @@
   margin-left: auto;
   display: flex;
   gap: 2px;
+  flex: none;
+}
+
+/*
+ * Narrow panel: the header sheds the source tag before it sheds the title,
+ * and the tabs give up their letter-spacing before they give up their
+ * labels. Both are legible down to ~280px, which is under anything Chrome's
+ * side panel or a tablet-width overlay will hand us.
+ */
+@container panel (max-width: 380px) {
+  .brand-sub { display: none; }
+  .head { gap: 8px; padding: 12px 10px; }
+}
+
+@container panel (max-width: 340px) {
+  .brand { font-size: 13px; letter-spacing: 0.08em; }
+  .tabs button { letter-spacing: 0.06em; padding: 9px 4px; }
+}
+
+/* Below this the counts are what would clip, and a tab you cannot read is
+   worse than a count you have to open the tab to see. */
+@container panel (max-width: 300px) {
+  .tabs .tab-count { display: none; }
+  .tabs button { font-size: 11px; }
 }
 
 .icon-btn {
@@ -1020,7 +1061,9 @@
   font-size: 12px;
 }
 
-@media (max-width: 150px) {
+/* The panel stays legible down to about 260px; below that it was shown but
+   clipped, which helped nobody. The rail takes over there instead. */
+@container panel (max-width: 260px) {
   .panel {
     display: none;
   }

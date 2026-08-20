@@ -153,7 +153,11 @@ Prefer something pinned open instead of a toggle? Click the extension's
 toolbar icon to open it as a **side panel** — same search, same data, just
 docked in the browser's sidebar instead of overlaid on the page. The hotkey
 overlay and the side panel are independent; use whichever fits how you play.
-Drag the panel narrow and it collapses to a marker rail.
+Both surfaces reflow all the way down: the header drops the source tag and
+then truncates the title before its buttons can be pushed off the edge, and
+the tabs give up their letter-spacing and counts before their labels. Below
+260px the panel collapses to a marker rail rather than showing something
+clipped.
 
 ### Settings
 
@@ -347,7 +351,12 @@ Two deliberate departures from the mockup:
   the OS instead.
 - **The collapsed rail** is a responsive state, not a button: an extension
   can't resize Chrome's side panel, so the rail appears when *you* drag the
-  panel narrow.
+  panel narrow — below 260px, where the full layout stops being legible.
+
+Narrow-width rules key off a **container query** on `.ro-root`, which is the
+frame in the overlay and the body in the side panel. A media query would be
+wrong for the overlay, whose frame is a fixed 420px inside a full-size page,
+and only accidentally right for the side panel.
 
 The blueprint frames and `+` registration marks in the canvas are the design
 system's presentation convention for the canvas itself, not part of the

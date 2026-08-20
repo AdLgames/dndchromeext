@@ -25,7 +25,17 @@
   overflow: hidden;
 }
 
-/* The rail is a side-panel-width affordance; the overlay is never that narrow. */
+/*
+ * The rail is a side-panel affordance: it is how a *dragged* panel collapses,
+ * and the overlay cannot be dragged. Hiding it is not enough on its own —
+ * the same container query hides .panel, so on a very narrow viewport (where
+ * 92vw falls under the collapse width) the overlay would come up empty.
+ * Pin the panel visible here so the frame always has contents.
+ */
 .frame .rail {
   display: none;
+}
+
+.frame .panel {
+  display: flex;
 }
