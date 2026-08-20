@@ -228,3 +228,44 @@ assert(ask("can I cast fireball")?.headline.includes("Fireball"),
   "a spell on the sheet is recognised by name");
 assert(ask("can I cast fireball", body({ ...dave, conditions: ["prone"], hp: 0 }))?.verdict === "no",
   "a character at 0 hit points cannot cast");
+
+// --- body text splits into paragraphs and tables
+const { parseBlocks } = await import("../src/ui/markup.js");
+
+assert(parseBlocks("Just prose.").every((b) => b.kind === "paragraph"),
+  "text with no pipes stays a single paragraph");
+
+const doc = parseBlocks([
+  "Intro line.",
+  "",
+  "_Table: Star Heart Clone",
+  "| d20     | Effect            |",
+  "| ------- | ----------------- |",
+  "| 1       | Lifeless.         |",
+  "| 2-11    | Nothing.          |",
+  "",
+  "Trailing line.",
+].join("\n"));
+
+assert(doc.length === 3, "an intro, a table and a tail are three blocks");
+const tbl = doc[1];
+assert(tbl.kind === "table" && tbl.caption === "Star Heart Clone", "the caption is lifted off the table");
+assert(tbl.kind === "table" && tbl.header.join() === "d20,Effect", "the header row is separated out");
+assert(tbl.kind === "table" && tbl.rows.length === 2, "the dashed rule is not a row");
+assert(tbl.kind === "table" && tbl.rows[1].join() === "2-11,Nothing.", "cells are trimmed of padding");
+assert(doc[2].kind === "paragraph" && doc[2].text === "Trailing line.",
+  "text after the table is its own paragraph");
+
+const twoTables = parseBlocks([
+  "| d8 | Creature |", "| -- | -------- |", "| 01 | Weasel   |",
+  "", "Rust Bag:", "",
+  "| d8 | Creature |", "| -- | -------- |", "| 01 | Rat      |",
+].join("\n"));
+assert(twoTables.filter((b) => b.kind === "table").length === 2,
+  "an entry can carry more than one table");
+
+const orphan = parseBlocks("_Table: Nothing Follows\nplain text");
+assert(orphan.every((b) => b.kind === "paragraph"),
+  "a caption with no table under it is left as text");
+assert(orphan[0].kind === "paragraph" && orphan[0].text.startsWith("_Table: Nothing Follows"),
+  "and is kept verbatim rather than being silently dropped");

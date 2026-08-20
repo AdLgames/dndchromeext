@@ -42,7 +42,7 @@ import {
   type RuntimeMessage,
   type SourceRecord,
 } from "../types";
-import { el, highlighted, icon, prose } from "./dom";
+import { el, highlighted, icon, prose, richText } from "./dom";
 import { emblem, emblemFor } from "./emblem";
 
 const SRD_ATTRIBUTION =
@@ -1054,7 +1054,7 @@ export class Panel {
     return el("div", { class: "section-body" }, entries.map((entry) =>
       el("div", { class: "entry" }, [
         el("div", { class: "entry-head" }, [el("span", { class: "entry-name", text: entry.name })]),
-        prose(entry.desc, (expr) => this.doRoll(expr)),
+        richText(entry.desc, (expr) => this.doRoll(expr)),
       ])
     ));
   }
@@ -1500,7 +1500,7 @@ export class Panel {
               a.label ? el("span", { class: "entry-label", text: a.label }) : null,
               a.value ? el("span", { class: "entry-value", text: a.value }) : null,
             ]),
-            prose(a.desc, (expr) => this.doRoll(expr, `${rule.title} — ${a.name}`)),
+            richText(a.desc, (expr) => this.doRoll(expr, `${rule.title} — ${a.name}`)),
           ])
         )),
       ]));
@@ -1553,7 +1553,7 @@ export class Panel {
       ].filter(Boolean) as HTMLElement[];
       if (kv.length) meta.push(el("div", { class: "section-body" }, kv));
     }
-    return [...meta, el("div", { class: "section-body" }, [prose(rule.body, (expr) => this.doRoll(expr, rule.title))])];
+    return [...meta, el("div", { class: "section-body" }, [richText(rule.body, (expr) => this.doRoll(expr, rule.title))])];
   }
 
   // ----------------------------------------------------------- catalog --

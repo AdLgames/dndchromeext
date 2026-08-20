@@ -303,7 +303,14 @@
   letter-spacing: 0.08em;
   color: var(--color-neutral-700);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  text-align: right;
+  /* Badges are usually "CR 1/4", but a handful of items carry a whole
+     rarity sentence. Left nowrap and unbounded, one of those took the row
+     and squeezed the title into one word per line. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 42%;
+  overflow-wrap: anywhere;
 }
 
 .row.sel .row-badge {
@@ -1071,6 +1078,66 @@
     display: flex;
   }
 }
+
+/* Tables come out of the source as pipe markdown padded to a few hundred
+   characters a line. Rendered as prose that is a wall of dashes, so they get
+   to be tables — scrolling sideways inside their own box rather than
+   stretching the panel. */
+.table-wrap {
+  margin: 10px 0;
+  overflow-x: auto;
+  border: 1px solid var(--color-divider);
+  border-radius: 3px;
+}
+
+.table-caption {
+  display: block;
+  padding: 7px 10px;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  background: var(--color-accent-100);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.rule-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+}
+
+.rule-table th,
+.rule-table td {
+  text-align: left;
+  padding: 6px 10px;
+  vertical-align: top;
+  border-top: 1px solid var(--color-divider);
+}
+
+.rule-table thead th {
+  border-top: 0;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  white-space: nowrap;
+}
+
+/* The first column of these tables is nearly always the die result. */
+.rule-table tbody td:first-child {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent-800);
+}
+
+/* Body prose keeps the source's line breaks; inside a cell that is wrong —
+   the text should flow to the column, and the die result should not break
+   across lines at all. */
+.rule-table .prose { margin: 0; white-space: normal; }
+.rule-table tbody td:first-child .prose { white-space: nowrap; }
 
 /* The verdict sits above the ranked rules and has to read as an answer
    rather than another result, so it gets the accent edge and states its

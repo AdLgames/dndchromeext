@@ -1,4 +1,5 @@
 import { DICE_RE } from "../dice";
+import { parseBlocks } from "./markup";
 
 type Props = Record<string, string | number | boolean | ((e: Event) => void) | undefined>;
 
@@ -94,7 +95,6 @@ export function prose(text: string, onRoll: (expr: string) => void): HTMLElement
   return p;
 }
 
-/** Renders `text` with the [start,end) range wrapped in a highlight span. */
 export function highlighted(text: string, range: [number, number] | null): (Node | string)[] {
   if (!range) return [text];
   const [start, end] = range;
@@ -103,4 +103,35 @@ export function highlighted(text: string, range: [number, number] | null): (Node
     el("span", { class: "mark", text: text.slice(start, end) }),
     text.slice(end),
   ];
+}
+
+/**
+ * Body text as a sequence of blocks: paragraphs, and tables where the source
+ * used pipe markdown. Dice stay clickable inside both.
+ */
+export function richText(text: string, onRoll: (expr: string) => void): DocumentFragment {
+  const frag = document.createDocumentFragment();
+
+  for (const block of parseBlocks(text)) {
+    if (block.kind === "paragraph") {
+      frag.append(prose(block.text, onRoll));
+      continue;
+    }
+
+    const wrap = el("div", { class: "table-wrap" });
+    if (block.caption) wrap.append(el("span", { class: "table-caption", text: block.caption }));
+
+    const node = el("table", { class: "rule-table" });
+    if (block.header.length) {
+      node.append(el("thead", {}, [el("tr", {}, block.header.map((c) => el("th", { text: c })))]));
+    }
+    node.append(el("tbody", {}, block.rows.map((row) =>
+      el("tr", {}, row.map((c) => el("td", {}, [prose(c, onRoll)])))
+    )));
+
+    wrap.append(node);
+    frag.append(wrap);
+  }
+
+  return frag;
 }

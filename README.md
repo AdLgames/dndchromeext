@@ -68,6 +68,10 @@ ordinary text.
   It understands a deliberately small set of questions; anything it doesn't
   recognise just falls through to the rules lookup it would have shown
   anyway.
+- **Tables are tables.** Where an entry's text carries a `d20 | Effect`
+  roll table, it is rendered as one — with the die results in their own
+  column and the dice inside still clickable — rather than as the wall of
+  pipes and dashes the source markdown would otherwise put on screen.
 - **Roll anything.** Every dice expression in the text is a button:
   `1d10 + 2` in a monster's bite, `8d6` in Fireball, `2d4 + 2` on a healing
   potion. Fall damage asks how far you fell and rolls the right number of
@@ -230,6 +234,42 @@ selected-text lookup on or off. The extension's options page
 (`chrome://extensions` → Details → Extension options) additionally lists
 your current shortcuts and the local log of searches that found nothing.
 
+## Permissions, and what the extension can see
+
+Four permissions, and one of them is broad. Taking them in turn:
+
+| Declared | Why |
+| --- | --- |
+| `storage` | Everything the extension keeps — settings, pins, your party, your homebrew, your pictures, the encounter — lives in `chrome.storage.local` on this machine |
+| `sidePanel` | The docked panel |
+| `downloads` | Writing the export file when *you* press Export |
+| `content_scripts: <all_urls>` | The point of the thing: the hotkey has to work on whatever VTT or wiki you happen to be on |
+
+`<all_urls>` is the one worth being deliberate about, so:
+
+- The content script **makes no network calls at all** and reads nothing off
+  the page except a selection you explicitly ask it to look up with
+  Ctrl+Shift+D. It mounts a closed shadow root, listens for the hotkey, and
+  otherwise does nothing.
+- It cannot run on `chrome://` pages, the Web Store, or other extensions'
+  pages — Chrome forbids that regardless of what a manifest asks for. The
+  Web Store is also excluded explicitly, so the intent is on the record
+  rather than merely enforced.
+- If you would rather it not run somewhere specific, Chrome can do that
+  without any change here: extension menu → **This can read and change site
+  data** → *On click*, or remove the host from the extension's site access
+  list.
+
+The bundled data files are declared `web_accessible_resources` because the
+content script fetches them, and that declaration is what makes them
+reachable from a page's origin. They carry **`use_dynamic_url: true`**, so
+they are served from an origin that is regenerated each session rather than
+from the extension's fixed id. Without it, any site's own JavaScript could
+`fetch("chrome-extension://<fixed-id>/data/rules.json")` and, from whether
+it succeeded, learn that you have this extension installed — a standard
+extension-fingerprinting trick. Nothing leaves the device either way, but
+the install should not be advertised to every page you visit.
+
 ## Development
 
 ```sh
@@ -261,7 +301,8 @@ src/
   ui/
     panel.ts                # the whole panel: browse, results, detail, pins, settings
     dom.ts                   # element builder, Lucide-style icons, match highlighting
-    emblem.ts                 # generated per-entry artwork (see below)
+    markup.ts                 # body text -> paragraphs and roll tables (DOM-free, tested)
+    emblem.ts                  # generated per-entry artwork (see below)
     theme.css                 # design tokens (light + dark)
     panel.css                  # component layer shared by both surfaces
   content/

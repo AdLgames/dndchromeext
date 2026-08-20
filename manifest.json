@@ -8,6 +8,9 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "action": {
+    "default_title": "Rules Overlay \u2014 open the side panel"
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -18,7 +21,11 @@
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "permissions": ["storage", "sidePanel", "downloads"],
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "downloads"
+  ],
   "commands": {
     "toggle-overlay": {
       "suggested_key": {
@@ -37,16 +44,32 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle",
-      "all_frames": false
+      "all_frames": false,
+      "exclude_matches": [
+        "*://chrome.google.com/webstore/*",
+        "*://chromewebstore.google.com/*"
+      ]
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["data/rules.json", "data/aliases.json", "data/flows.json", "data/sources.json"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "data/rules.json",
+        "data/aliases.json",
+        "data/flows.json",
+        "data/sources.json"
+      ],
+      "matches": [
+        "<all_urls>"
+      ],
+      "use_dynamic_url": true
     }
   ]
 }
