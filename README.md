@@ -75,8 +75,15 @@ ordinary text.
   goblin can menace a level-8 party. Adding a scaled monster to combat
   carries the adjusted numbers over. This is explicitly homebrew — the SRD
   has no official scaling rules — and the panel says so.
-- **Combat tracker** (its own tab) runs a turn-based fight:
+- **Combat tracker** (its own tab) runs a turn-based fight, split into
+  **Characters** and **Enemies**:
 
+  0. The two sides are separated and styled apart — your characters on the
+     warm parchment with an amber edge and an outlined *PC* tag, the
+     opposition on the darker surface with an ink edge and a solid *Enemy*
+     tag. Each header counts who is still up ("1 of 2 up"). Every row keeps
+     its turn number, so the initiative sequence is still readable while
+     "how is my side doing" stops being a scan through interleaved rows.
   1. **Roll initiative for all** rolls d20 + Dex for everyone at once and
      freezes the turn order (stored, so editing a number later doesn't
      silently reshuffle whose turn it is).
@@ -147,8 +154,11 @@ ordinary text.
   a character sheet too, and each one can take a picture.
 - **Party roster** (the other tab): characters with stats, plus
   spells/actions/items picked from the SRD, from your own entries, **or
-  typed in as free text**. Everything autosaves as you type — there is no
-  save button to forget.
+  typed in as free text**. **Class is a picker**, listing the classes the
+  loaded packs describe — combat derives a caster's spell ability from this
+  field, so a typo used to cost them their spellcasting silently. *Other…*
+  still takes anything you like, it just has to be chosen on purpose.
+  Everything autosaves as you type — there is no save button to forget.
 - **One file for all of it.** Export writes your characters, your homebrew
   and **every picture you have uploaded** — including ones you put on
   published entries, since those are the part of a long campaign that cannot

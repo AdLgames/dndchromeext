@@ -28,6 +28,8 @@ let homebrew: Rule[] = [];
 let rules: Rule[] = [];
 let portraits: Portraits = {};
 let tab: "party" | "homebrew" = "party";
+/** Characters currently typing a class the packs do not list. */
+const customClassOpen = new Set<string>();
 const listEl = document.getElementById("list")!;
 const statusEl = document.getElementById("status")!;
 
@@ -174,6 +176,72 @@ function renderList(character: Character, list: (typeof LISTS)[number]) {
 }
 
 /**
+ * The classes the bundled packs actually describe, read off the class
+ * features rather than hard-coded, so a pack that adds one is offered too.
+ * The same group carries backgrounds and feats, which are not classes.
+ */
+const NOT_A_CLASS = new Set(["background", "feat"]);
+
+function classNames(): string[] {
+  const names = new Set<string>();
+  for (const rule of rules) {
+    const name = rule.feature?.className;
+    if (name && !NOT_A_CLASS.has(name.toLowerCase())) names.add(name);
+  }
+  return [...names].sort();
+}
+
+const CUSTOM = "\u0000custom";
+
+/**
+ * Class is a lookup, not free text: spelling it "Wizzard" quietly cost the
+ * character their spellcasting ability in combat, which is derived from this
+ * field. Anything not in the packs is still allowed — "Other" swaps in a
+ * plain text box — it just has to be chosen deliberately.
+ */
+function renderClassPicker(character: Character) {
+  const known = classNames();
+  const custom = Boolean(character.className) && !known.includes(character.className);
+
+  if (custom || customClassOpen.has(character.id)) {
+    return el("div", { class: "class-pick" }, [
+      el("input", {
+        class: "text-input", type: "text", value: character.className,
+        placeholder: "Class", "aria-label": "class",
+        oninput: (e: Event) => patch(character.id, { className: (e.target as HTMLInputElement).value }),
+      }),
+      el("button", {
+        class: "mini-btn", type: "button", text: "Pick from list",
+        onclick: () => {
+          customClassOpen.delete(character.id);
+          patch(character.id, { className: "" });
+          render();
+        },
+      }),
+    ]);
+  }
+
+  const select = el("select", {
+    class: "text-input", "aria-label": "class",
+    onchange: (e: Event) => {
+      const value = (e.target as HTMLSelectElement).value;
+      if (value === CUSTOM) {
+        customClassOpen.add(character.id);
+        render();
+        return;
+      }
+      patch(character.id, { className: value });
+    },
+  }, [
+    el("option", { value: "", text: "Class…" }),
+    ...known.map((name) => el("option", { value: name, text: name })),
+    el("option", { value: CUSTOM, text: "Other…" }),
+  ]);
+  select.value = character.className;
+  return select;
+}
+
+/**
  * The character's picture: a generated emblem until someone drops their own
  * art on it. Clicking the picture is the file picker — no separate button,
  * because the picture is the affordance.
@@ -218,11 +286,7 @@ function renderCharacter(character: Character) {
       class: "char-name", type: "text", value: character.name, "aria-label": "character name",
       oninput: (e: Event) => patch(character.id, { name: (e.target as HTMLInputElement).value }),
     }),
-    el("input", {
-      class: "text-input", type: "text", value: character.className, placeholder: "Class",
-      "aria-label": "class",
-      oninput: (e: Event) => patch(character.id, { className: (e.target as HTMLInputElement).value }),
-    }),
+    renderClassPicker(character),
     el("button", {
       class: "mini-btn danger", text: "Delete",
       style: "margin-left:auto",

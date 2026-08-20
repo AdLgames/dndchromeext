@@ -1630,9 +1630,31 @@ export class Panel {
       return body;
     }
 
-    list.forEach((c, index) => {
-      body.append(this.renderCombatant(c, started ? index === this.encounter.turn : false, index));
-    });
+    // Grouped by side rather than strictly by initiative. The turn banner
+    // names whose turn it is and every row keeps its order number, so the
+    // sequence is still readable — while "how is my side doing" stops being
+    // a scan through interleaved rows.
+    const rows = list.map((c, index) => ({ c, index }));
+    const sides = [
+      { key: "allies", label: "Characters", rows: rows.filter((r) => r.c.isPlayer) },
+      { key: "foes", label: "Enemies", rows: rows.filter((r) => !r.c.isPlayer) },
+    ];
+
+    for (const side of sides) {
+      if (!side.rows.length) continue;
+      const standing = side.rows.filter((r) => !isDead(r.c) && r.c.hp > 0).length;
+      body.append(el("div", { class: `group-head side-${side.key}` }, [
+        el("span", { text: side.label }),
+        el("span", {
+          text: standing === side.rows.length
+            ? String(side.rows.length)
+            : `${standing} of ${side.rows.length} up`,
+        }),
+      ]));
+      for (const { c, index } of side.rows) {
+        body.append(this.renderCombatant(c, started ? index === this.encounter.turn : false, index));
+      }
+    }
 
     if (this.encounter.log.length) {
       body.append(el("div", { class: "group-head" }, [
@@ -1970,7 +1992,7 @@ export class Panel {
       el("span", { class: "fighter-init", text: String(c.initiative) }),
       el("span", { class: `fighter-name${dead ? " dead" : ""}`, text: c.name }),
       dead ? el("span", { class: "fighter-dead", text: "(deceased)" }) : null,
-      c.isPlayer ? el("span", { class: "fighter-tag", text: "PC" }) : null,
+      el("span", { class: `fighter-tag ${c.isPlayer ? "ally" : "foe"}`, text: c.isPlayer ? "PC" : "Enemy" }),
       el("button", {
         class: "icon-btn", title: "Remove",
         style: "margin-left:auto",
@@ -2097,7 +2119,8 @@ export class Panel {
     ]);
 
     const fighter = el("div", {
-      class: `fighter${isActive ? " active" : ""}${down ? " down" : ""}${dead ? " dead" : ""}`,
+      class: `fighter ${c.isPlayer ? "ally" : "foe"}${isActive ? " active" : ""}`
+        + `${down ? " down" : ""}${dead ? " dead" : ""}`,
     }, [head, vitals, hpControls, statuses, saves, conc]);
 
     if (this.attackFrom === c.id) fighter.append(this.renderActionPanel(c));
