@@ -5,7 +5,10 @@ import {
   saveEncounter, TRACKED_CONDITIONS,
 } from "../combat";
 import { loadDataset } from "../data/load";
-import { describeHomebrew, getHomebrew, HOMEBREW_SOURCE, onHomebrewChanged } from "../homebrew";
+import {
+  describeHomebrew, getHomebrew, HOMEBREW_SOURCE, HOMEBREW_SOURCE_ID, newHomebrewId,
+  onHomebrewChanged, removeHomebrew, upsertHomebrew,
+} from "../homebrew";
 import { clearRollLog, formatRoll, getRollLog, pushRoll, roll, rollRepeated, type RollDetail } from "../dice";
 import { getParty, onPartyChanged } from "../party";
 import {
@@ -26,7 +29,9 @@ import {
 import {
   GROUP_LABELS, RULE_GROUPS,
   type AbilityScores, type Character, type Combatant, type CombatAction, type Encounter, type Flow,
-  type NamedEntry, type QuickAction, type Rule, type RuleGroup, type SourceRecord,
+  OPEN_TAB_MESSAGE, SRD_SOURCE_ID,
+  type NamedEntry, type QuickAction, type Rule, type RuleGroup, type RuntimeMessage,
+  type SourceRecord,
 } from "../types";
 import { el, highlighted, icon, prose } from "./dom";
 import { emblem, emblemFor } from "./emblem";
@@ -41,7 +46,7 @@ const GROUP_ICONS: Record<RuleGroup, "bestiary" | "spells" | "rules" | "items" |
 const ABILITY_KEYS: (keyof AbilityScores)[] = ["str", "dex", "con", "int", "wis", "cha"];
 
 type View = "browse" | "results" | "detail" | "pinned" | "settings" | "flow" | "catalog";
-type Tab = "search" | "combat";
+type Tab = "search" | "homebrew" | "combat";
 
 type SortKey = "name" | "cr" | "ac" | "hp" | "level";
 
@@ -65,12 +70,28 @@ function modifier(score: number): string {
   return mod >= 0 ? `+${mod}` : String(mod);
 }
 
+/**
+ * Opens one of the extension's own pages. The side panel can do this
+ * directly; the overlay is a content script, where chrome.tabs does not
+ * exist, so it hands the URL to the service worker instead. Without this the
+ * links simply threw on every page the overlay ran on.
+ */
+function openTab(url: string) {
+  if (chrome.tabs?.create) {
+    void chrome.tabs.create({ url });
+    return;
+  }
+  void chrome.runtime.sendMessage({ type: OPEN_TAB_MESSAGE, url } satisfies RuntimeMessage)
+    .catch(() => {});
+}
+
 export class Panel {
   private root: HTMLElement;
   private opts: PanelOptions;
 
   private rules: Rule[] = [];
   private bundled: Rule[] = [];
+  private homebrew: Rule[] = [];
   private rulesById = new Map<string, Rule>();
   private flows: Flow[] = [];
   private flowsById = new Map<string, Flow>();
@@ -170,7 +191,8 @@ export class Panel {
    * — both show, tagged by their pack.
    */
   private setHomebrew(entries: Rule[]) {
-    this.rules = [...this.bundled, ...entries.map(describeHomebrew)];
+    this.homebrew = entries.map(describeHomebrew);
+    this.rules = [...this.bundled, ...this.homebrew];
     this.rulesById = new Map(this.rules.map((r) => [r.id, r]));
     this.counts = { bestiary: 0, spells: 0, rules: 0, items: 0, classes: 0 };
     for (const rule of this.rules) this.counts[rule.group] += 1;
@@ -362,7 +384,7 @@ export class Panel {
   handleKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.preventDefault();
-      if (this.tab === "combat") { this.tab = "search"; this.render(); this.focus(); }
+      if (this.tab !== "search") { this.tab = "search"; this.render(); this.focus(); }
       else if (this.view !== "browse" && this.view !== "results") this.back();
       else if (this.query) { this.query = ""; this.runSearch(); this.focus(); }
       else this.opts.onClose?.();
@@ -410,6 +432,12 @@ export class Panel {
       return panel;
     }
 
+    if (this.tab === "homebrew" && this.view !== "detail") {
+      panel.append(this.renderHeader(), this.renderTabs(), this.renderHomebrewTab());
+      panel.append(this.footer());
+      return panel;
+    }
+
     if (this.view === "catalog") {
       panel.append(this.renderSubHeader(GROUP_LABELS[this.catalogGroup]), this.renderCatalog());
       return panel;
@@ -448,6 +476,9 @@ export class Panel {
 
     return el("div", { class: "tabs" }, [
       tab("search", "Search"),
+      tab("homebrew", "Homebrew", this.homebrew.length
+        ? el("span", { class: "tab-count", text: String(this.homebrew.length) })
+        : null),
       tab("combat", "Combat", inFight
         ? el("span", { class: "tab-count", text: String(inFight) })
         : null),
@@ -754,7 +785,7 @@ export class Panel {
           rule.subtitle ? el("span", { class: "detail-sub", text: rule.subtitle }) : null,
         ]),
       ]),
-      this.portraitControls(rule),
+      this.ownershipRow(rule),
     ]);
     if (rule.tldr) {
       head.append(el("div", { style: "margin-top:10px" }, [
@@ -805,6 +836,98 @@ export class Panel {
     return body;
   }
 
+  /**
+   * Everything published is read-only. Nothing in the panel edits a bundled
+   * entry, and this is what says so out loud — the alternative is a reader
+   * hunting for an edit control that was never going to exist.
+   */
+  private isLocked(rule: Rule): boolean {
+    return (rule.source ?? SRD_SOURCE_ID) !== HOMEBREW_SOURCE_ID;
+  }
+
+  private openEditor(ruleId?: string) {
+    openTab(chrome.runtime.getURL(`party.html#homebrew${ruleId ? `:${ruleId}` : ""}`));
+  }
+
+  /**
+   * Locked entries can still be a starting point: this copies one into your
+   * homebrew, where it is yours to change. The original is untouched.
+   */
+  private async copyToHomebrew(rule: Rule) {
+    const copy: Rule = {
+      ...structuredClone(rule),
+      id: newHomebrewId(),
+      source: HOMEBREW_SOURCE_ID,
+      title: `${rule.title} (copy)`,
+      // seeAlso and quick actions point into the bundled graph by id; a copy
+      // keeping them would look like it owned links it does not.
+      seeAlso: undefined,
+      actions: undefined,
+    };
+    this.setHomebrew(await upsertHomebrew(copy));
+    this.open(this.rulesById.get(copy.id) ?? copy);
+    this.openEditor(copy.id);
+  }
+
+  /** Your own entries, all in one place, with the controls the panel allows. */
+  private renderHomebrewTab(): HTMLElement {
+    const body = el("div", { class: "body" });
+
+    body.append(el("div", { class: "hb-bar" }, [
+      el("span", { class: "hb-bar-title", text: this.homebrew.length
+        ? `${this.homebrew.length} ${this.homebrew.length === 1 ? "entry" : "entries"} of your own`
+        : "Your own entries" }),
+      el("button", {
+        class: "qa-btn",
+        onclick: () => this.openEditor(),
+      }, [icon("plus", 13), "New entry"]),
+    ]));
+
+    if (!this.homebrew.length) {
+      body.append(el("div", { class: "empty", text: "Nothing of your own yet. Anything you write joins the search, the catalogue and the combat tracker alongside the published entries — and stays editable, which they are not." }));
+      return body;
+    }
+
+    for (const group of RULE_GROUPS) {
+      const inGroup = this.homebrew.filter((r) => r.group === group);
+      if (!inGroup.length) continue;
+
+      body.append(el("div", { class: "group-head" }, [
+        el("span", { text: GROUP_LABELS[group] }),
+        el("span", { text: String(inGroup.length) }),
+      ]));
+
+      for (const rule of inGroup) {
+        body.append(el("div", { class: "hb-row" }, [
+          el("button", {
+            class: "hb-open",
+            onclick: () => { this.tab = "search"; this.open(rule); },
+          }, [
+            this.picture(rule, 34),
+            el("div", { class: "row-main" }, [
+              el("span", { class: "row-title", text: rule.title || "Untitled" }),
+              el("span", { class: "row-sub", text: rule.subtitle ?? rule.category }),
+            ]),
+          ]),
+          el("button", {
+            class: "mini-btn", text: "Edit",
+            onclick: () => this.openEditor(rule.id),
+          }),
+          el("button", {
+            class: "icon-btn", title: `Delete ${rule.title}`,
+            onclick: async () => {
+              if (!confirm(`Delete ${rule.title || "this entry"}? This cannot be undone.`)) return;
+              this.setHomebrew(await removeHomebrew(rule.id));
+              this.render();
+            },
+          }, [icon("trash", 13)]),
+        ]));
+      }
+    }
+
+    return body;
+  }
+
   /** An entry's picture: their own upload if set, otherwise the emblem. */
   private picture(rule: Rule, size: number): HTMLElement {
     return emblem(rule, { size, portrait: this.portraits[rule.id] });
@@ -825,6 +948,35 @@ export class Panel {
   }
 
   /**
+   * Says who owns the entry and what can be done to it. Published entries are
+   * locked: their text and stats are the published text and stats, and the
+   * panel has no way to change them. Your own carry edit and delete instead.
+   * A picture is yours either way — it sits over the entry rather than in it.
+   */
+  private ownershipRow(rule: Rule): HTMLElement {
+    const locked = this.isLocked(rule);
+    const pack = this.sourcesById.get(rule.source ?? SRD_SOURCE_ID)?.name ?? "SRD 5.1";
+
+    return el("div", { class: "own-row" }, [
+      locked
+        ? el("span", { class: "lock-chip", title: `${pack} is published content and cannot be edited here.` },
+            [icon("lock", 11), `${pack} · locked`])
+        : el("span", { class: "own-chip" }, [icon("pencil", 11), "Yours · editable"]),
+      locked
+        ? el("button", {
+            class: "portrait-btn",
+            title: "Copy this into your homebrew, where you can change it",
+            onclick: () => void this.copyToHomebrew(rule),
+          }, [icon("plus", 13), "Copy to my homebrew"])
+        : el("button", {
+            class: "portrait-btn",
+            onclick: () => this.openEditor(rule.id),
+          }, [icon("pencil", 13), "Edit entry"]),
+      this.portraitControls(rule),
+    ]);
+  }
+
+    /**
    * Lets the reader drop their own art onto an entry. Nothing ships with the
    * extension — the picture lives in chrome.storage.local on this machine, so
    * whatever they paste in stays theirs and stays offline.
@@ -2138,14 +2290,14 @@ export class Panel {
           el("div", { class: "qa-list" }, [
             el("button", {
               class: "qa-btn",
-              onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL("party.html") }),
+              onclick: () => openTab(chrome.runtime.getURL("party.html")),
             }, [
               icon("classes", 14),
               this.party.length ? `Your party (${this.party.length})` : "Create your party",
             ]),
             el("button", {
               class: "qa-btn",
-              onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL("party.html#homebrew") }),
+              onclick: () => openTab(chrome.runtime.getURL("party.html#homebrew")),
             }, [icon("plus", 14), "Write your own entries"]),
           ]),
         ]),
@@ -2190,7 +2342,7 @@ export class Panel {
       el("span", { class: "label", text: `Data v5.1 · ${this.rules.length} local` }),
       el("button", {
         class: "btn-primary", text: "Shortcuts",
-        onclick: () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" }),
+        onclick: () => openTab("chrome://extensions/shortcuts"),
       }),
     ]);
   }

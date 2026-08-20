@@ -247,8 +247,10 @@ export type AliasTable = Record<string, string>; // alias text -> rule id
 export const TOGGLE_MESSAGE = "rules-overlay:toggle" as const;
 export const LOOKUP_MESSAGE = "rules-overlay:lookup" as const;
 export const GET_SELECTION_MESSAGE = "rules-overlay:get-selection" as const;
+export const OPEN_TAB_MESSAGE = "rules-overlay:open-tab" as const;
 
 export type RuntimeMessage =
   | { type: typeof TOGGLE_MESSAGE }
   | { type: typeof LOOKUP_MESSAGE; query: string }
-  | { type: typeof GET_SELECTION_MESSAGE };
+  | { type: typeof GET_SELECTION_MESSAGE }
+  | { type: typeof OPEN_TAB_MESSAGE; url: string };

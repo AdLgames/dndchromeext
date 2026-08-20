@@ -389,11 +389,29 @@ async function boot() {
   [party, homebrew, { rules }, portraits] = await Promise.all([
     getParty(), getHomebrew(), loadDataset(), getPortraits(),
   ]);
-  // #homebrew lets the panel link straight to the editor; otherwise land on
-  // whichever side has something in it, so returning to the page shows work
-  // rather than an empty tab.
-  if (location.hash === "#homebrew" || (!party.length && homebrew.length)) tab = "homebrew";
+  // The panel links here as #homebrew, or #homebrew:<id> to land on one
+  // entry; otherwise open whichever side has something in it, so returning to
+  // the page shows work rather than an empty tab.
+  const [hash, wanted] = location.hash.replace(/^#/, "").split(":");
+  if (hash === "homebrew" || (!party.length && homebrew.length)) tab = "homebrew";
   render();
+
+  if (wanted) focusEntry(wanted);
+}
+
+/**
+ * Brings one entry into view and puts the caret in its name. Without this a
+ * link from the panel dropped you at the top of a long page of cards with no
+ * clue which one you came for.
+ */
+function focusEntry(id: string) {
+  const at = homebrew.findIndex((r) => r.id === id);
+  if (at < 0) return;
+  const card = listEl.querySelectorAll(".char")[at];
+  if (!(card instanceof HTMLElement)) return;
+  card.classList.add("just-linked");
+  card.scrollIntoView({ block: "center" });
+  (card.querySelector(".char-name") as HTMLInputElement | null)?.focus();
 }
 
 void boot();

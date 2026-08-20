@@ -1,5 +1,7 @@
 import { getSettings } from "./settings";
-import { GET_SELECTION_MESSAGE, LOOKUP_MESSAGE, TOGGLE_MESSAGE, type RuntimeMessage } from "./types";
+import {
+  GET_SELECTION_MESSAGE, LOOKUP_MESSAGE, OPEN_TAB_MESSAGE, TOGGLE_MESSAGE, type RuntimeMessage,
+} from "./types";
 
 const PENDING_KEY = "rulesOverlay:pendingLookup";
 
@@ -16,6 +18,19 @@ async function send<T>(tabId: number, message: RuntimeMessage): Promise<T | unde
     return undefined;
   }
 }
+
+// Content scripts have no chrome.tabs, so the overlay asks the worker to
+// open the pages it links to. Only extension pages and the shortcuts screen
+// are allowed through — the message crosses from a content script running on
+// an arbitrary site, so the URL is checked here rather than trusted.
+chrome.runtime.onMessage.addListener((message: RuntimeMessage) => {
+  if (message?.type !== OPEN_TAB_MESSAGE) return;
+  const url = String(message.url);
+  const own = chrome.runtime.getURL("");
+  if (url.startsWith(own) || url === "chrome://extensions/shortcuts") {
+    void chrome.tabs.create({ url });
+  }
+});
 
 // The hotkeys are registered via chrome.commands in the manifest (not a
 // content-script keydown listener) so they fire even when focus is inside a

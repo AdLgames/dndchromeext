@@ -117,9 +117,19 @@ ordinary text.
   instead: open it, press *Add picture*, and the file is squared, shrunk to
   160px and kept in local storage on that machine. *Remove* puts the emblem
   back.
-- **Write your own.** *Your content* → *Your entries* creates monsters,
-  spells, items, rules and features that behave exactly like the published
-  ones: they are searched, browsed, filtered by AC/CR, pinned, rolled from,
+- **Published entries are locked; yours are not.** Every entry says which it
+  is. Anything from a content pack carries a **SRD 5.1 · locked** chip — its
+  text and stats are the published text and stats, and nothing in the panel
+  edits them. Your own carry **Yours · editable** with edit and delete
+  instead. The lock is enforced at the storage layer too: an imported entry
+  is forced into the homebrew namespace and cannot claim to be SRD or shadow
+  a bundled slug.
+- **Copy to my homebrew** turns any locked entry into a starting point: it
+  duplicates the whole stat block into your own entries, where it *is*
+  editable, and leaves the original untouched.
+- **Write your own.** The **Homebrew tab** lists everything you have written,
+  grouped by kind, with edit and delete on each. Entries behave exactly like
+  published ones: searched, browsed, filtered by AC/CR, pinned, rolled from,
   scaled, and dropped into the combat tracker, tagged **Your homebrew** and
   switchable off in settings like any other pack. A monster gets the full
   stat block — abilities, saves, senses, traits, actions, reactions,
@@ -270,7 +280,7 @@ pack can be switched off in settings.
 | **D&D SRD 5.1** © Wizards of the Coast | CC BY 4.0 | 1,553 entries — 78 rules, 319 spells, 334 monsters, 403 items, 419 class features |
 | **Level Up: Advanced 5e** (EN Publishing) | CC BY 4.0 | 435 entries — 306 magic items, 71 feats & backgrounds, 58 spells |
 | **Black Flag SRD** (Kobold Press) | ORC | 71 monsters |
-| **Your homebrew** | Yours | Whatever you write — see *Your content* |
+| **Your homebrew** | Yours | Whatever you write — unlocked, and the only pack that is |
 
 2,059 entries in total. The packs overlap heavily — all three restate the
 same core spells and creatures — so the build drops an entry when an

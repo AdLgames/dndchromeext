@@ -1353,6 +1353,85 @@
 .pip.fail.on { background: var(--color-neutral-700); border-color: var(--color-neutral-700); }
 
 /* --------------------------------------------------------------- tabs -- */
+/* ------------------------------------------------------- your entries -- */
+/* Ownership is stated on every entry: published content is locked, yours is
+   editable. The chip is the only place that difference is visible, so it
+   reads as a label rather than a button. */
+.own-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.own-row .portrait-tools { margin-top: 0; }
+
+.lock-chip,
+.own-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-family: var(--font-heading);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid var(--color-divider);
+  color: var(--color-neutral-700);
+}
+
+.own-chip {
+  border-color: var(--color-accent-300);
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+
+.hb-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-accent-100);
+}
+
+.hb-bar-title {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.hb-bar .qa-btn { margin-left: auto; }
+
+.hb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.group-head + .hb-row { border-top: 0; }
+
+.hb-row:hover { background: var(--color-accent-100); }
+
+.hb-open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .tabs {
   display: flex;
   border-bottom: 1px solid var(--color-divider);

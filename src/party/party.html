@@ -255,6 +255,10 @@
     .sub-row, .action-row { grid-template-columns: 1fr; }
   }
 
+  /* Marks the card the panel linked to, so arriving mid-page is not a
+     hunt through identical cards. */
+  .just-linked { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
   .empty-state { padding: 40px 14px; text-align: center; color: var(--color-neutral-700); }
   .status { font-size: 13px; color: var(--color-accent-700); min-height: 18px; }
 </style>
