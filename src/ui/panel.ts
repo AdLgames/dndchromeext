@@ -5,6 +5,7 @@ import {
   saveEncounter, TRACKED_CONDITIONS,
 } from "../combat";
 import { loadDataset } from "../data/load";
+import { describeHomebrew, getHomebrew, HOMEBREW_SOURCE, onHomebrewChanged } from "../homebrew";
 import { clearRollLog, formatRoll, getRollLog, pushRoll, roll, rollRepeated, type RollDetail } from "../dice";
 import { getParty, onPartyChanged } from "../party";
 import {
@@ -69,6 +70,7 @@ export class Panel {
   private opts: PanelOptions;
 
   private rules: Rule[] = [];
+  private bundled: Rule[] = [];
   private rulesById = new Map<string, Rule>();
   private flows: Flow[] = [];
   private flowsById = new Map<string, Flow>();
@@ -121,17 +123,20 @@ export class Panel {
   }
 
   private async init() {
-    const [{ rules, aliases, flows, sources }, recency, settings, pins, encounter, party, log, portraits] =
+    const [{ rules, aliases, flows, sources }, recency, settings, pins, encounter, party, log, portraits, homebrew] =
       await Promise.all([
         loadDataset(), getRecency(), getSettings(), getPins(), getEncounter(), getParty(), getRollLog(),
-        getPortraits(),
+        getPortraits(), getHomebrew(),
       ]);
-    this.rules = rules;
-    this.rulesById = new Map(rules.map((r) => [r.id, r]));
+    this.bundled = rules;
     this.flows = flows;
     this.flowsById = new Map(flows.map((f) => [f.id, f]));
-    this.sources = sources;
-    this.sourcesById = new Map(sources.map((s) => [s.id, s]));
+    // Your own entries are a pack alongside the bundled ones, so they get a
+    // source record and therefore a footer notice, a result tag and a
+    // settings toggle for free.
+    this.sources = [...sources, HOMEBREW_SOURCE];
+    this.sourcesById = new Map(this.sources.map((s) => [s.id, s]));
+    this.setHomebrew(homebrew);
     this.aliasIndex = buildAliasIndex(aliases);
     this.recency = recency;
     this.settings = settings;
@@ -140,7 +145,6 @@ export class Panel {
     this.party = party;
     this.lastRoll = log[0] ?? null;
     this.portraits = portraits;
-    for (const rule of rules) this.counts[rule.group] += 1;
 
     onSettingsChanged((next) => { this.settings = next; this.applyTheme(); this.render(); });
     onPinsChanged((next) => { this.pins = next; this.render(); });
@@ -150,6 +154,7 @@ export class Panel {
     // loaded with and "Add from your party" stayed empty forever.
     onPartyChanged((next) => { this.party = next; this.render(); });
     onPortraitsChanged((next) => { this.portraits = next; this.render(); });
+    onHomebrewChanged((next) => { this.setHomebrew(next); this.render(); });
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.applyTheme());
 
     this.applyTheme();
@@ -157,6 +162,18 @@ export class Panel {
     // Boot is async, so an earlier focus() landed on an input this render
     // has just replaced — put the caret back where the caller wanted it.
     if (this.everFocused) this.focus();
+  }
+
+  /**
+   * Rebuilds the searchable corpus. Homebrew is appended rather than merged
+   * by title so an entry you wrote never silently displaces a published one
+   * — both show, tagged by their pack.
+   */
+  private setHomebrew(entries: Rule[]) {
+    this.rules = [...this.bundled, ...entries.map(describeHomebrew)];
+    this.rulesById = new Map(this.rules.map((r) => [r.id, r]));
+    this.counts = { bestiary: 0, spells: 0, rules: 0, items: 0, classes: 0 };
+    for (const rule of this.rules) this.counts[rule.group] += 1;
   }
 
   private applyTheme() {
@@ -2117,15 +2134,19 @@ export class Panel {
           ]),
         ]),
         el("div", { class: "set-group" }, [
-          el("span", { class: "label", text: "Party" }),
+          el("span", { class: "label", text: "Your content" }),
           el("div", { class: "qa-list" }, [
             el("button", {
               class: "qa-btn",
               onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL("party.html") }),
             }, [
               icon("classes", 14),
-              this.party.length ? `Open party (${this.party.length})` : "Create your party",
+              this.party.length ? `Your party (${this.party.length})` : "Create your party",
             ]),
+            el("button", {
+              class: "qa-btn",
+              onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL("party.html#homebrew") }),
+            }, [icon("plus", 14), "Write your own entries"]),
           ]),
         ]),
         el("div", { class: "set-group" }, [

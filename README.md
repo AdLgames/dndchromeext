@@ -117,10 +117,24 @@ ordinary text.
   instead: open it, press *Add picture*, and the file is squared, shrunk to
   160px and kept in local storage on that machine. *Remove* puts the emblem
   back.
-- **Party roster** (a full tab, linked from settings): characters with
-  stats, plus spells/actions/items picked from the SRD **or typed in as free
-  text** for homebrew. Everything autosaves as you type — there is no save
-  button to forget. Export hands someone a party file; import loads one.
+- **Write your own.** *Your content* → *Your entries* creates monsters,
+  spells, items, rules and features that behave exactly like the published
+  ones: they are searched, browsed, filtered by AC/CR, pinned, rolled from,
+  scaled, and dropped into the combat tracker, tagged **Your homebrew** and
+  switchable off in settings like any other pack. A monster gets the full
+  stat block — abilities, saves, senses, traits, actions, reactions,
+  legendary actions — and each action row shows *what the combat engine
+  parses out of it*, so a mistyped damage line is visible while you write it
+  rather than as a missing attack mid-fight. Your entries can be picked onto
+  a character sheet too, and each one can take a picture.
+- **Party roster** (the other tab): characters with stats, plus
+  spells/actions/items picked from the SRD, from your own entries, **or
+  typed in as free text**. Everything autosaves as you type — there is no
+  save button to forget.
+- **One file for all of it.** Export writes your characters, your homebrew
+  and the pictures attached to either. Import merges by id, so loading a
+  file twice updates rather than duplicates, and party files exported before
+  homebrew existed still load.
 
 Rebind either hotkey at `chrome://extensions/shortcuts` if it collides with
 something else (e.g. a VTT's own shortcuts).
@@ -144,6 +158,7 @@ your current shortcuts and the local log of searches that found nothing.
 ```sh
 npm run dev          # build once (unminified, sourcemapped) and watch
 npm run typecheck    # tsc --noEmit
+npm test             # export/import round-trip and untrusted-input checks
 npm run build:rules  # regenerate src/data/rules.json from data-src/
 ```
 
@@ -160,19 +175,23 @@ src/
   scale.ts                # approximate monster CR scaling
   settings.ts             # sources / appearance / behavior, persisted locally
   pins.ts                  # pinned entry ids
-  party.ts                  # party roster storage, export/import
+  party.ts                  # party roster storage
+  homebrew.ts                # your own entries + coercion of untrusted JSON
+  portraits.ts                # your own pictures, downscaled into local storage
+  backup.ts                    # one export/import bundle: party + homebrew + pictures
   combat.ts                  # turn order, action economy, condition effects, resolution
   types.ts                    # Rule, StatBlock, Flow, Character, Combatant
   ui/
     panel.ts                # the whole panel: browse, results, detail, pins, settings
     dom.ts                   # element builder, Lucide-style icons, match highlighting
+    emblem.ts                 # generated per-entry artwork (see below)
     theme.css                 # design tokens (light + dark)
     panel.css                  # component layer shared by both surfaces
   content/
     mount.ts                    # shadow host lifecycle: show/hide, focus, keydown isolation
     styles.css                   # overlay-only modal chrome
   sidepanel/ , options/           # thin hosts that mount the shared panel
-  party/                           # the party roster page (its own tab)
+  party/                           # "Your content": the roster and the homebrew editor
   data/
     rules.json                     # generated — do not hand-edit, see data-src/
     aliases.json                    # hand-authored table-slang → rule id map (the moat)
@@ -189,6 +208,7 @@ scripts/
   import-srd-content.mjs                # importer: 5e-bits/5e-database (SRD 5.1) -> data-src/
   import-open5e.mjs                      # importer: open5e-api (A5E, Black Flag) -> data-src/
   gen-icons.mjs                          # generates icons/*.png (zero-dependency PNG encoder)
+  test-content.mts                        # npm test: export/import + untrusted-input checks
 ```
 
 Both surfaces render from one `ui/panel.ts`; the overlay mounts it inside a
@@ -250,6 +270,7 @@ pack can be switched off in settings.
 | **D&D SRD 5.1** © Wizards of the Coast | CC BY 4.0 | 1,553 entries — 78 rules, 319 spells, 334 monsters, 403 items, 419 class features |
 | **Level Up: Advanced 5e** (EN Publishing) | CC BY 4.0 | 435 entries — 306 magic items, 71 feats & backgrounds, 58 spells |
 | **Black Flag SRD** (Kobold Press) | ORC | 71 monsters |
+| **Your homebrew** | Yours | Whatever you write — see *Your content* |
 
 2,059 entries in total. The packs overlap heavily — all three restate the
 same core spells and creatures — so the build drops an entry when an

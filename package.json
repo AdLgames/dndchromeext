@@ -10,7 +10,8 @@
     "build:ext": "node esbuild.config.mjs",
     "build": "npm run build:rules && npm run build:icons && npm run build:ext",
     "dev": "npm run build:rules && npm run build:icons && node esbuild.config.mjs --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx scripts/test-content.mts"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.270",

@@ -1,5 +1,9 @@
+import { exportContent, importContent, parseContentFile } from "../backup";
 import { loadDataset } from "../data/load";
-import { exportParty, getParty, newCharacter, parsePartyFile, saveParty } from "../party";
+import {
+  getHomebrew, newHomebrew, removeHomebrew, saveHomebrew,
+} from "../homebrew";
+import { getParty, newCharacter, saveParty } from "../party";
 import { getSettings, resolveTheme } from "../settings";
 import type { AbilityScores, Character, CharacterEntry, Rule, RuleGroup } from "../types";
 import { el } from "../ui/dom";
@@ -8,6 +12,7 @@ import {
   characterPortraitKey, fileToDataUrl, getPortraits, removePortrait, setPortrait,
   type Portraits,
 } from "../portraits";
+import { GROUP_CHOICES, renderHomebrew, type EditorHost } from "./homebrew-editor";
 
 const ABILITY_KEYS: (keyof AbilityScores)[] = ["str", "dex", "con", "int", "wis", "cha"];
 
@@ -19,8 +24,10 @@ const LISTS: { key: "spells" | "actions" | "items"; label: string; group: RuleGr
 ];
 
 let party: Character[] = [];
+let homebrew: Rule[] = [];
 let rules: Rule[] = [];
 let portraits: Portraits = {};
+let tab: "party" | "homebrew" = "party";
 const listEl = document.getElementById("list")!;
 const statusEl = document.getElementById("status")!;
 
@@ -46,6 +53,17 @@ async function persist(immediate = false) {
   }
   saveTimer = setTimeout(async () => {
     await saveParty(party);
+    status("All changes saved.");
+  }, 250) as unknown as number;
+}
+
+let brewTimer: number | undefined;
+
+async function persistHomebrew() {
+  clearTimeout(brewTimer);
+  statusEl.textContent = "Saving…";
+  brewTimer = setTimeout(async () => {
+    homebrew = await saveHomebrew(homebrew);
     status("All changes saved.");
   }, 250) as unknown as number;
 }
@@ -85,7 +103,10 @@ function renderAdder(character: Character, list: (typeof LISTS)[number]) {
     suggest.textContent = "";
     if (query.length < 2) { suggest.style.display = "none"; return; }
 
-    const pool = list.group ? rules.filter((r) => r.group === list.group) : rules;
+    // Your own entries are pickable too, so a homebrew sword can sit on a
+    // character sheet and resolve in combat like a published one.
+    const corpus = [...rules, ...homebrew];
+    const pool = list.group ? corpus.filter((r) => r.group === list.group) : corpus;
     const hits = pool
       .filter((r) => r.title.toLowerCase().includes(query))
       // Titles that *start* with the query first, then shortest — otherwise
@@ -245,31 +266,101 @@ function renderCharacter(character: Character) {
   ]);
 }
 
+const editorHost: EditorHost = {
+  entries: () => homebrew,
+  patch: (id, changes) => {
+    homebrew = homebrew.map((r) => (r.id === id ? { ...r, ...changes } : r));
+    void persistHomebrew();
+  },
+  add: (group) => {
+    homebrew = [...homebrew, newHomebrew(group)];
+    void persistHomebrew();
+    render();
+  },
+  remove: (rule) => {
+    if (!confirm(`Delete ${rule.title || "this entry"}?`)) return;
+    homebrew = homebrew.filter((r) => r.id !== rule.id);
+    void removeHomebrew(rule.id).then(() => status("Deleted."));
+    render();
+  },
+  portrait: (rule) => portraits[rule.id],
+  setPortrait: async (rule, file) => {
+    try {
+      portraits = await setPortrait(rule.id, await fileToDataUrl(file));
+      render();
+    } catch {
+      status("Could not read that image — try a PNG or JPEG.");
+    }
+  },
+  clearPortrait: async (rule) => {
+    portraits = await removePortrait(rule.id);
+    render();
+  },
+  rerender: () => render(),
+};
+
+/** Tabs live here rather than in the panel: this is the page you edit on. */
+function renderTabs() {
+  const tabs: { key: typeof tab; label: string; count: number }[] = [
+    { key: "party", label: "Party", count: party.length },
+    { key: "homebrew", label: "Your entries", count: homebrew.length },
+  ];
+  return el("div", { class: "page-tabs" }, tabs.map((t) =>
+    el("button", {
+      class: `page-tab${tab === t.key ? " on" : ""}`, type: "button",
+      onclick: () => { tab = t.key; render(); },
+    }, [t.label, el("span", { class: "tab-count", text: String(t.count) })])
+  ));
+}
+
+function renderToolbar() {
+  if (tab === "party") {
+    return el("div", { class: "toolbar-row" }, [
+      el("button", {
+        class: "btn-primary", type: "button", text: "Add character",
+        onclick: () => {
+          party = [...party, newCharacter()];
+          void persist();
+          render();
+        },
+      }),
+    ]);
+  }
+  return el("div", { class: "toolbar-row" }, [
+    el("span", { class: "fld-k", text: "Add" }),
+    ...GROUP_CHOICES.map((choice) =>
+      el("button", {
+        class: "mini-btn", type: "button", text: choice.label,
+        onclick: () => editorHost.add(choice.group),
+      })
+    ),
+  ]);
+}
+
 function render() {
   listEl.textContent = "";
+  listEl.append(renderTabs(), renderToolbar());
+
+  if (tab === "homebrew") {
+    listEl.append(renderHomebrew(editorHost));
+    return;
+  }
+
   if (!party.length) {
     listEl.append(el("div", { class: "empty-state" }, [
-      el("p", { text: "No characters yet. Add one, or import a party file someone sent you." }),
+      el("p", { text: "No characters yet. Add one, or import a file someone sent you." }),
     ]));
     return;
   }
-  const wrap = el("div", { style: "display:flex;flex-direction:column;gap:24px" },
-    party.map(renderCharacter));
-  listEl.append(wrap);
+  listEl.append(el("div", { class: "stack" }, party.map(renderCharacter)));
 }
 
-document.getElementById("add")!.addEventListener("click", () => {
-  party = [...party, newCharacter()];
-  void persist();
-  render();
-});
-
 document.getElementById("export")!.addEventListener("click", async () => {
-  const blob = new Blob([exportParty(party)], { type: "application/json" });
+  const blob = new Blob([await exportContent()], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-  await chrome.downloads.download({ url, filename: "rules-overlay-party.json", saveAs: true });
+  await chrome.downloads.download({ url, filename: "rules-overlay-content.json", saveAs: true });
   setTimeout(() => URL.revokeObjectURL(url), 10000);
-  status("Party exported.");
+  status("Exported your characters, your entries and their pictures.");
 });
 
 const fileInput = document.getElementById("file") as HTMLInputElement;
@@ -278,11 +369,15 @@ fileInput.addEventListener("change", async () => {
   const file = fileInput.files?.[0];
   if (!file) return;
   try {
-    const imported = parsePartyFile(await file.text());
-    party = [...party, ...imported];
-    await persist();
+    const bundle = parseContentFile(await file.text());
+    await importContent(bundle);
+    [party, homebrew, portraits] = await Promise.all([getParty(), getHomebrew(), getPortraits()]);
     render();
-    status(`Imported ${imported.length} character${imported.length === 1 ? "" : "s"}.`);
+    const parts = [
+      bundle.characters.length ? `${bundle.characters.length} character${bundle.characters.length === 1 ? "" : "s"}` : "",
+      bundle.homebrew.length ? `${bundle.homebrew.length} entr${bundle.homebrew.length === 1 ? "y" : "ies"}` : "",
+    ].filter(Boolean);
+    status(parts.length ? `Imported ${parts.join(" and ")}.` : "That file had nothing in it.");
   } catch (err) {
     status(`Could not import: ${(err as Error).message}`);
   }
@@ -291,7 +386,13 @@ fileInput.addEventListener("change", async () => {
 
 async function boot() {
   document.body.dataset.theme = resolveTheme((await getSettings()).appearance);
-  [party, { rules }, portraits] = await Promise.all([getParty(), loadDataset(), getPortraits()]);
+  [party, homebrew, { rules }, portraits] = await Promise.all([
+    getParty(), getHomebrew(), loadDataset(), getPortraits(),
+  ]);
+  // #homebrew lets the panel link straight to the editor; otherwise land on
+  // whichever side has something in it, so returning to the page shows work
+  // rather than an empty tab.
+  if (location.hash === "#homebrew" || (!party.length && homebrew.length)) tab = "homebrew";
   render();
 }
 

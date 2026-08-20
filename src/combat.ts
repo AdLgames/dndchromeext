@@ -54,7 +54,7 @@ export function damageFromDesc(desc: string): string | undefined {
   return bare?.[1];
 }
 
-const DAMAGE_TYPE_RE =
+export const DAMAGE_TYPE_RE =
   /\b(acid|bludgeoning|cold|fire|force|lightning|necrotic|piercing|poison|psychic|radiant|slashing|thunder)\b/i;
 
 export function actionsFromStatBlock(stat: StatBlock): CombatAction[] {

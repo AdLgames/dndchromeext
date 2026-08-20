@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Rules Overlay — Party</title>
+<title>Rules Overlay — Your content</title>
 <link rel="stylesheet" href="theme.css" />
 <link rel="stylesheet" href="panel.css" />
 <style>
@@ -14,7 +14,7 @@
     font-family: var(--font-body);
   }
   main { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
-  header { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+  header { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
   h1 {
     font-family: var(--font-heading);
     font-size: 30px;
@@ -170,6 +170,91 @@
     padding: 8px;
     resize: vertical;
   }
+  .stack { display: flex; flex-direction: column; gap: 24px; }
+
+  .page-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--color-divider); }
+  .page-tab {
+    font-family: var(--font-heading);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    background: none;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    color: var(--color-neutral-700);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .page-tab:hover { color: var(--color-neutral-900); }
+  .page-tab.on { color: var(--color-accent-800); border-bottom-color: var(--color-accent); }
+  .tab-count {
+    font-size: 10.5px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: var(--color-accent-100);
+    border: 1px solid var(--color-accent-300);
+  }
+
+  .toolbar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 14px 0 20px; }
+
+  /* The homebrew forms: dense label-over-control pairs that wrap. */
+  .form { display: flex; flex-direction: column; gap: 14px; padding: 14px; border-top: 1px solid var(--color-divider); }
+  .flds { display: flex; flex-wrap: wrap; gap: 10px; }
+  .flds.checks { gap: 16px; }
+  .fld { display: flex; flex-direction: column; gap: 3px; flex: 1 1 110px; min-width: 0; }
+  .fld.wide { flex-basis: 260px; }
+  .fld-k {
+    font-family: var(--font-heading);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-neutral-700);
+  }
+  .fld input, .fld select, .fld textarea,
+  .sub-row input, .sub-row select, .sub-row textarea {
+    font: inherit;
+    font-size: 13px;
+    padding: 5px 7px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-divider);
+    border-radius: 3px;
+    color: inherit;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .fld textarea, .sub-row textarea { resize: vertical; line-height: 1.55; font-family: var(--font-body); }
+  .fld input:focus, .fld select:focus, .fld textarea:focus,
+  .sub-row input:focus, .sub-row textarea:focus { outline: 0; border-color: var(--color-accent); }
+  .fld-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+
+  .subrows { display: flex; flex-direction: column; gap: 8px; }
+  .sub-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) 2fr auto;
+    gap: 8px;
+    align-items: start;
+    padding: 8px;
+    background: var(--color-accent-100);
+    border: 1px solid var(--color-divider);
+    border-radius: 4px;
+  }
+  .action-row { grid-template-columns: minmax(110px, 1fr) minmax(120px, 1fr) 90px 2fr auto; }
+  /* Shows what the combat parser found, so a mistyped damage line is
+     visible here rather than as a missing attack mid-fight. */
+  .action-row .parsed {
+    grid-column: 1 / -1;
+    font-size: 11.5px;
+    color: var(--color-accent-700);
+  }
+  .action-row .parsed.none { color: var(--color-neutral-700); font-style: italic; }
+  .sub-row .mini-btn { align-self: center; }
+  @media (max-width: 720px) {
+    .sub-row, .action-row { grid-template-columns: 1fr; }
+  }
+
   .empty-state { padding: 40px 14px; text-align: center; color: var(--color-neutral-700); }
   .status { font-size: 13px; color: var(--color-accent-700); min-height: 18px; }
 </style>
@@ -178,14 +263,16 @@
   <main>
     <header>
       <div>
-        <h1>Your party</h1>
+        <h1>Your content</h1>
         <p class="sub">
-          Stored on this device only — there is no account and nothing is uploaded.
-          Use export to hand the party file to another player, and import to load theirs.
+          Your characters and your own monsters, spells and items. Stored on this
+          device only — there is no account and nothing is uploaded. Anything you
+          write here joins the search, the catalogue and the combat tracker
+          alongside the published entries. Export hands the lot — pictures
+          included — to another player; import loads theirs alongside your own.
         </p>
       </div>
       <div class="toolbar">
-        <button id="add" class="btn-primary" type="button">Add character</button>
         <button id="export" class="mini-btn" type="button">Export</button>
         <button id="import" class="mini-btn" type="button">Import</button>
         <input id="file" type="file" accept="application/json,.json" hidden />

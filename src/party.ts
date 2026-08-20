@@ -68,9 +68,14 @@ export function parsePartyFile(text: string): Character[] {
 
   return data.characters.slice(0, 20).map((c) => {
     const base = newCharacter(str(c?.name, "Unnamed"));
+    // Ids survive the round trip: a character's picture is stored against
+    // theirs, so minting a new one on import would orphan the portrait and
+    // duplicate the character every time the same file was loaded.
+    const id = typeof c?.id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(c.id) ? c.id : base.id;
     const abilities = (c?.abilities ?? {}) as Partial<AbilityScores>;
     return {
       ...base,
+      id,
       className: str(c?.className),
       level: num(c?.level, 1),
       ac: num(c?.ac, 10),
