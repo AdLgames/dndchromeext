@@ -36,6 +36,12 @@ unpacked** → select the `dist/` folder.
 - **Search** and **Combat** are top-level tabs, so you can flip between
   looking something up and running the fight without losing either.
 
+**Back returns you to what you were doing**, not to the front page: the
+catalogue you were scrolling — with its filters and your place in the list —
+the search results you had, the pinned list, or the Homebrew tab. It chains,
+so following cross-references from entry to entry and then walking back out
+retraces the way you came. Escape does the same thing.
+
 ### Browsing and filtering
 
 Tapping a category on the home screen opens its **full catalogue** — all 405

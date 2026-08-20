@@ -72,6 +72,28 @@ type Tab = "search" | "homebrew" | "combat";
 
 type SortKey = "name" | "cr" | "ac" | "hp" | "level";
 
+/**
+ * Everything that makes up "where I was". Back used to remember only which
+ * entries you had opened, so leaving a spell you reached from the catalogue
+ * dropped you on the browse tiles — losing the list, its filters and your
+ * place in it.
+ */
+type NavState = {
+  tab: Tab;
+  view: View;
+  detailId: string | null;
+  flowId: string | null;
+  catalogGroup: RuleGroup;
+  catalogFilter: StatFilter;
+  catalogSort: SortKey;
+  catalogShown: number;
+  query: string;
+  groupFilter: RuleGroup | "all";
+  selected: number;
+  openPin: string | null;
+  scrollTop: number;
+};
+
 const CATALOG_PAGE = 80;
 
 export type PanelOptions = {
@@ -141,7 +163,7 @@ export class Panel {
   private selected = 0;
   private groupFilter: RuleGroup | "all" = "all";
   private detail: Rule | null = null;
-  private history: string[] = [];
+  private history: NavState[] = [];
   private openSections = new Set<string>(["defenses", "traits", "actions", "reactions", "legendary"]);
   private openPin: string | null = null;
   private explain = false;
@@ -321,7 +343,7 @@ export class Panel {
   }
 
   private open(rule: Rule, pushHistory = true) {
-    if (pushHistory && this.detail) this.history.push(this.detail.id);
+    if (pushHistory) this.pushHistory();
     if (rule.id !== this.detail?.id) this.scaleDelta = 0;
     this.detail = rule;
     this.view = "detail";
@@ -375,6 +397,7 @@ export class Panel {
   }
 
   private openFlow(flow: Flow) {
+    this.pushHistory();
     this.flow = flow;
     this.view = "flow";
     this.render();
@@ -527,22 +550,76 @@ export class Panel {
     });
   }
 
+  private snapshot(): NavState {
+    return {
+      tab: this.tab,
+      view: this.view,
+      detailId: this.detail?.id ?? null,
+      flowId: this.flow?.id ?? null,
+      catalogGroup: this.catalogGroup,
+      catalogFilter: { ...this.catalogFilter },
+      catalogSort: this.catalogSort,
+      catalogShown: this.catalogShown,
+      query: this.query,
+      groupFilter: this.groupFilter,
+      selected: this.selected,
+      openPin: this.openPin,
+      scrollTop: this.root.querySelector(".body")?.scrollTop ?? 0,
+    };
+  }
+
+  /** Remembers where we are, so whatever we open next can come back to it. */
+  private pushHistory() {
+    this.history.push(this.snapshot());
+    // Deep enough to wander and find the way home, bounded so a long session
+    // of hopping between cross-references doesn't grow without limit.
+    if (this.history.length > 30) this.history.shift();
+  }
+
+  private restore(state: NavState) {
+    this.tab = state.tab;
+    this.view = state.view;
+    this.detail = state.detailId ? this.rulesById.get(state.detailId) ?? null : null;
+    this.flow = state.flowId ? this.flowsById.get(state.flowId) ?? null : null;
+    this.catalogGroup = state.catalogGroup;
+    this.catalogFilter = state.catalogFilter;
+    this.catalogSort = state.catalogSort;
+    this.catalogShown = state.catalogShown;
+    this.groupFilter = state.groupFilter;
+    this.selected = state.selected;
+    this.openPin = state.openPin;
+    this.combatPicker = false;
+
+    // Results are derived from the query, so they are recomputed rather than
+    // carried around in the snapshot. runSearch resets the selection and the
+    // group filter, so those are re-applied on top of it rather than before.
+    if (state.query !== this.query && state.view === "results") {
+      this.query = state.query;
+      this.runSearch();
+      this.selected = state.selected;
+      this.groupFilter = state.groupFilter;
+    }
+    this.query = state.query;
+    this.render();
+    this.restoreScroll(state.scrollTop);
+  }
+
+  /** Puts a long list back where it was, not at the top. */
+  private restoreScroll(top: number) {
+    if (!top) return;
+    queueMicrotask(() => {
+      const body = this.root.querySelector(".body");
+      if (body) body.scrollTop = top;
+    });
+  }
+
   private back() {
-    // Side trips (a flow, the pinned list, settings, the tracker) return to
-    // wherever you were; only the detail view walks its own history stack.
-    if (this.view !== "detail") {
-      this.flow = null;
-      this.combatPicker = false;
-      this.view = this.detail ? "detail" : this.query.trim() ? "results" : "browse";
-      this.render();
-      return;
-    }
-    const prev = this.history.pop();
-    if (prev && this.rulesById.has(prev)) {
-      this.detail = this.rulesById.get(prev)!;
-      this.render();
-      return;
-    }
+    const previous = this.history.pop();
+    if (previous) { this.restore(previous); return; }
+
+    // Nothing recorded — a side trip taken straight from a fresh panel.
+    this.flow = null;
+    this.combatPicker = false;
     this.detail = null;
     this.view = this.query.trim() ? "results" : "browse";
     this.render();
@@ -749,7 +826,7 @@ export class Panel {
       el("button", {
         class: "roll-meta",
         title: "Open the dice tray",
-        onclick: () => { this.view = "dice"; this.render(); },
+        onclick: () => { this.pushHistory(); this.view = "dice"; this.render(); },
       }, [
         el("span", { class: "roll-label", text: detail.label ?? detail.expr }),
         el("span", {
@@ -770,7 +847,7 @@ export class Panel {
     const pinBtn = extra ?? el("button", {
       class: `icon-btn${this.pins.length ? " on" : ""}`,
       title: this.pins.length ? `Pinned (${this.pins.length})` : "Pinned",
-      onclick: () => { this.view = "pinned"; this.render(); },
+      onclick: () => { this.pushHistory(); this.view = "pinned"; this.render(); },
     }, [icon("pin", 15)]);
 
     const partyBtn = el("button", {
@@ -790,12 +867,12 @@ export class Panel {
     const diceBtn = el("button", {
       class: `icon-btn${this.view === "dice" ? " on" : ""}`,
       title: "Dice tray",
-      onclick: () => { this.view = "dice"; this.render(); },
+      onclick: () => { this.pushHistory(); this.view = "dice"; this.render(); },
     }, [icon("dice", 15)]);
 
     const settingsBtn = el("button", {
       class: "icon-btn", title: "Settings",
-      onclick: () => { this.view = "settings"; this.render(); },
+      onclick: () => { this.pushHistory(); this.view = "settings"; this.render(); },
     }, [icon("settings", 15)]);
 
     const kids: (HTMLElement | null)[] = [pinBtn, partyBtn, diceBtn, combatBtn, settingsBtn];
@@ -1202,7 +1279,13 @@ export class Panel {
         body.append(el("div", { class: "hb-row" }, [
           el("button", {
             class: "hb-open",
-            onclick: () => { this.tab = "search"; this.open(rule); },
+            onclick: () => {
+              // Record the tab we are leaving, or Back would return to the
+              // search tab we are about to switch to.
+              this.pushHistory();
+              this.tab = "search";
+              this.open(rule, false);
+            },
           }, [
             this.picture(rule, 34),
             el("div", { class: "row-main" }, [
@@ -1558,6 +1641,7 @@ export class Panel {
 
   // ----------------------------------------------------------- catalog --
   private openCatalog(group: RuleGroup) {
+    this.pushHistory();
     this.catalogGroup = group;
     this.catalogFilter = {};
     this.catalogSort = group === "bestiary" ? "cr" : group === "spells" ? "level" : "name";
@@ -2238,7 +2322,13 @@ export class Panel {
           rule
             ? el("button", {
                 class: "mini-btn", text: "Rule",
-                onclick: () => { this.tab = "search"; this.open(rule); },
+                onclick: () => {
+              // Record the tab we are leaving, or Back would return to the
+              // search tab we are about to switch to.
+              this.pushHistory();
+              this.tab = "search";
+              this.open(rule, false);
+            },
               })
             : null,
         ]),
@@ -2575,7 +2665,13 @@ export class Panel {
         fighter.append(el("div", { class: "fighter-row" }, [
           el("button", {
             class: "mini-btn", text: "Stat block",
-            onclick: () => { this.tab = "search"; this.open(rule); },
+            onclick: () => {
+              // Record the tab we are leaving, or Back would return to the
+              // search tab we are about to switch to.
+              this.pushHistory();
+              this.tab = "search";
+              this.open(rule, false);
+            },
           }),
         ]));
       }
