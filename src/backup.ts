@@ -36,22 +36,13 @@ export async function exportContent(): Promise<string> {
     exported: new Date().toISOString(),
     characters,
     homebrew,
-    portraits: relevantPortraits(portraits, characters, homebrew),
+    // Every picture, including ones put on published entries. They are the
+    // only irreplaceable thing here — a campaign's faces built up over
+    // months — and an export that quietly left most of them behind is not a
+    // backup. The published *entries* still aren't shipped; only your art.
+    portraits,
   };
   return JSON.stringify(file, null, 2);
-}
-
-/**
- * Only ships the pictures the file's own contents refer to. Exporting the
- * whole portrait map would attach art for hundreds of SRD entries the
- * recipient already has, for no benefit and a much larger file.
- */
-function relevantPortraits(all: Portraits, characters: Character[], homebrew: Rule[]): Portraits {
-  const wanted = new Set([
-    ...characters.map((c) => `character:${c.id}`),
-    ...homebrew.map((r) => r.id),
-  ]);
-  return Object.fromEntries(Object.entries(all).filter(([key]) => wanted.has(key)));
 }
 
 /**

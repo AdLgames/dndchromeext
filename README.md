@@ -89,7 +89,12 @@ ordinary text.
      target. Attack rolls go against the target's AC; save-based effects
      make the target roll against the DC, halving or avoiding the damage.
   4. Damage lands on the target, coming off temporary hit points first, and
-     is stored. Dropping to 0 applies unconscious and prone automatically.
+     is stored. Dropping to 0 applies unconscious and prone to a player
+     character, who is then dying and rolling death saves; anything else dies
+     outright at 0, as 5e says. **The dead are named in red, struck through
+     and marked *(deceased)***, they stop rolling death saves, and the log
+     says "dead" rather than "unconscious" — a corpse is not something that
+     might get up.
 
   **Conditions actually change the maths.** Attacking a prone target is
   advantage in melee and disadvantage at range; blinded, frightened,
@@ -126,9 +131,12 @@ ordinary text.
   a bundled slug.
 - **Copy to my homebrew** turns any locked entry into a starting point: it
   duplicates the whole stat block into your own entries, where it *is*
-  editable, and leaves the original untouched.
+  editable, and leaves the original untouched. It copies **what is on
+  screen** — scale a goblin to CR 2 first and the copy is a CR 2 goblin,
+  with the raised HP, AC, attack bonuses and damage baked in.
 - **Write your own.** The **Homebrew tab** lists everything you have written,
-  grouped by kind, with edit and delete on each. Entries behave exactly like
+  grouped by kind, with edit, delete, and — for your monsters — *To combat*
+  on each. Entries behave exactly like
   published ones: searched, browsed, filtered by AC/CR, pinned, rolled from,
   scaled, and dropped into the combat tracker, tagged **Your homebrew** and
   switchable off in settings like any other pack. A monster gets the full
@@ -142,9 +150,11 @@ ordinary text.
   typed in as free text**. Everything autosaves as you type — there is no
   save button to forget.
 - **One file for all of it.** Export writes your characters, your homebrew
-  and the pictures attached to either. Import merges by id, so loading a
-  file twice updates rather than duplicates, and party files exported before
-  homebrew existed still load.
+  and **every picture you have uploaded** — including ones you put on
+  published entries, since those are the part of a long campaign that cannot
+  be regenerated. Import merges by id, so loading a file twice updates
+  rather than duplicates, and party files exported before homebrew existed
+  still load.
 
 Rebind either hotkey at `chrome://extensions/shortcuts` if it collides with
 something else (e.g. a VTT's own shortcuts).
@@ -158,6 +168,11 @@ then truncates the title before its buttons can be pushed off the edge, and
 the tabs give up their letter-spacing and counts before their labels. Below
 260px the panel collapses to a marker rail rather than showing something
 clipped.
+
+The panel header carries four buttons: **pinned**, **your party**, the
+**combat tracker**, and **settings**. Each lights up when it has something in
+it, so the party is one click away from wherever you are rather than buried
+in settings.
 
 ### Settings
 

@@ -1,7 +1,8 @@
 import {
   abilityMod, activeCombatant, advance, applyDamage, applyHealing, canAct, combatantBlank,
   combatantFromCharacter, combatantFromMonster, effectiveSpeed, EMPTY_ENCOUNTER, getEncounter,
-  logEvent, onEncounterChanged, ordered, resolveAction, rollInitiativeForAll, rollSave,
+  isDead, logEvent, onEncounterChanged, ordered, resolveAction, rollInitiativeForAll, rollSave,
+  settleDeath,
   saveEncounter, TRACKED_CONDITIONS,
 } from "../combat";
 import { loadDataset } from "../data/load";
@@ -517,6 +518,12 @@ export class Panel {
       onclick: () => { this.view = "pinned"; this.render(); },
     }, [icon("pin", 15)]);
 
+    const partyBtn = el("button", {
+      class: `icon-btn${this.party.length ? " on" : ""}`,
+      title: this.party.length ? `Your party (${this.party.length})` : "Your party",
+      onclick: () => openTab(chrome.runtime.getURL("party.html")),
+    }, [icon("classes", 15)]);
+
     const combatBtn = el("button", {
       class: `icon-btn${this.encounter.combatants.length ? " on" : ""}`,
       title: this.encounter.combatants.length
@@ -530,7 +537,7 @@ export class Panel {
       onclick: () => { this.view = "settings"; this.render(); },
     }, [icon("settings", 15)]);
 
-    const kids: (HTMLElement | null)[] = [pinBtn, combatBtn, settingsBtn];
+    const kids: (HTMLElement | null)[] = [pinBtn, partyBtn, combatBtn, settingsBtn];
     if (this.opts.onClose) {
       kids.push(el("button", { class: "icon-btn", title: "Close", onclick: () => this.opts.onClose!() }, [icon("close", 15)]));
     }
@@ -854,17 +861,28 @@ export class Panel {
    * homebrew, where it is yours to change. The original is untouched.
    */
   private async copyToHomebrew(rule: Rule) {
+    // Copy what is on screen, not what is on disk: if the stepper has the
+    // monster at CR 5, that is the creature being copied.
+    const scaled = rule.monster && this.scaleDelta
+      ? scaleStatBlock(rule.monster, this.scaleDelta)
+      : rule.monster;
+    const suffix = rule.monster && this.scaleDelta ? ` (CR ${scaled!.cr})` : " (copy)";
+
     const copy: Rule = {
       ...structuredClone(rule),
+      ...(scaled ? { monster: structuredClone(scaled) } : {}),
       id: newHomebrewId(),
       source: HOMEBREW_SOURCE_ID,
-      title: `${rule.title} (copy)`,
+      title: `${rule.title}${suffix}`,
       // seeAlso and quick actions point into the bundled graph by id; a copy
       // keeping them would look like it owned links it does not.
       seeAlso: undefined,
       actions: undefined,
     };
     this.setHomebrew(await upsertHomebrew(copy));
+    // The copy's stat block already *is* the scaled one; leaving the stepper
+    // where it was would scale it a second time on screen.
+    this.scaleDelta = 0;
     this.open(this.rulesById.get(copy.id) ?? copy);
     this.openEditor(copy.id);
   }
@@ -909,6 +927,13 @@ export class Panel {
               el("span", { class: "row-sub", text: rule.subtitle ?? rule.category }),
             ]),
           ]),
+          rule.monster
+            ? el("button", {
+                class: "mini-btn", text: "To combat",
+                title: `Add ${rule.title} to the tracker`,
+                onclick: () => { this.addToCombat(rule); this.render(); },
+              })
+            : null,
           el("button", {
             class: "mini-btn", text: "Edit",
             onclick: () => this.openEditor(rule.id),
@@ -1731,7 +1756,9 @@ export class Panel {
       if (after && after.hp === 0) {
         encounter = logEvent(encounter, {
           kind: "note",
-          text: `${target.name} drops to 0 HP — unconscious and prone`,
+          text: isDead(after)
+            ? `${target.name} drops to 0 HP — dead`
+            : `${target.name} drops to 0 HP — unconscious and prone, rolling death saves`,
         });
       }
     }
@@ -1769,6 +1796,16 @@ export class Panel {
       kind: heal ? "heal" : "damage",
       text: `${c.name} ${heal ? "healed" : "takes"} ${amount}${heal ? "" : " damage"}`,
     });
+
+    const hit = encounter.combatants.find((x) => x.id === c.id);
+    if (!heal && hit && hit.hp === 0 && c.hp > 0) {
+      encounter = logEvent(encounter, {
+        kind: "note",
+        text: isDead(hit)
+          ? `${c.name} drops to 0 HP — dead`
+          : `${c.name} drops to 0 HP — unconscious and prone, rolling death saves`,
+      });
+    }
 
     // Damage taken outside an attack still threatens a held spell.
     if (!heal && c.concentrating) {
@@ -1914,6 +1951,7 @@ export class Panel {
 
   private renderCombatant(c: Combatant, isActive: boolean, index: number): HTMLElement {
     const down = c.hp <= 0;
+    const dead = isDead(c);
     const gated = this.encounter.started && !this.encounter.dmOverride;
     const canUse = !gated || isActive;
     const blocked = !canAct(c);
@@ -1930,7 +1968,8 @@ export class Panel {
         : null,
       this.fighterPicture(c, 26),
       el("span", { class: "fighter-init", text: String(c.initiative) }),
-      el("span", { class: "fighter-name", text: c.name }),
+      el("span", { class: `fighter-name${dead ? " dead" : ""}`, text: c.name }),
+      dead ? el("span", { class: "fighter-dead", text: "(deceased)" }) : null,
       c.isPlayer ? el("span", { class: "fighter-tag", text: "PC" }) : null,
       el("button", {
         class: "icon-btn", title: "Remove",
@@ -2058,12 +2097,12 @@ export class Panel {
     ]);
 
     const fighter = el("div", {
-      class: `fighter${isActive ? " active" : ""}${down ? " down" : ""}`,
+      class: `fighter${isActive ? " active" : ""}${down ? " down" : ""}${dead ? " dead" : ""}`,
     }, [head, vitals, hpControls, statuses, saves, conc]);
 
     if (this.attackFrom === c.id) fighter.append(this.renderActionPanel(c));
 
-    if (down && c.isPlayer) {
+    if (down && c.isPlayer && !dead) {
       const pip = (kind: "succ" | "fail", pipIndex: number, filled: boolean) =>
         el("button", {
           class: `pip ${kind}${filled ? " on" : ""}`,
@@ -2071,9 +2110,8 @@ export class Panel {
           onclick: () => {
             const key = kind === "succ" ? "successes" : "failures";
             const current = c.deathSaves[key];
-            this.patchCombatant(c.id, {
-              deathSaves: { ...c.deathSaves, [key]: current === pipIndex + 1 ? pipIndex : pipIndex + 1 },
-            });
+            const deathSaves = { ...c.deathSaves, [key]: current === pipIndex + 1 ? pipIndex : pipIndex + 1 };
+            this.patchCombatant(c.id, settleDeath({ ...c, deathSaves }));
           },
         });
 
@@ -2111,11 +2149,11 @@ export class Panel {
             else patch.failures = Math.min(3, patch.failures + 1);
 
             const outcome = patch.failures >= 3 ? " — dead"
-              : patch.successes >= 3 ? " — stable" : "";
+              : patch.successes >= 3 ? " — stable, no longer dying" : "";
             void this.updateEncounter(logEvent({
               ...this.encounter,
               combatants: this.encounter.combatants.map((x) =>
-                x.id === c.id ? { ...x, deathSaves: patch } : x
+                x.id === c.id ? settleDeath({ ...x, deathSaves: patch }) : x
               ),
             }, { kind: "save", text: `${c.name} death save: ${result.total}${outcome}` }));
           },

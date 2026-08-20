@@ -33,6 +33,11 @@
   --color-neutral-800: #4f4842;
   --color-neutral-900: #4a413c;
 
+  /* The one colour outside the warm ramp. Nothing else in the interface is
+     red, so it only ever means death. */
+  --color-danger: #a32b1e;
+  --color-danger-bg: #f6e2de;
+
   --on-accent: #fff;
   --panel-bg: linear-gradient(#f5eee4, #f5eee4),
     repeating-linear-gradient(0deg, rgba(74, 65, 60, 0.03) 0 1px, transparent 1px 6px);
@@ -69,6 +74,9 @@
   --color-neutral-700: #bcb0a3;
   --color-neutral-800: #d6c9ba;
   --color-neutral-900: #ece1d2;
+
+  --color-danger: #e08076;
+  --color-danger-bg: #3a221e;
 
   --on-accent: #1c1410;
   --panel-bg: linear-gradient(#211b17, #211b17),

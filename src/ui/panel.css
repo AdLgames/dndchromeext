@@ -1314,6 +1314,28 @@
 
 .fighter.down { opacity: 0.62; }
 
+/* Death is the one state worth breaking the palette for: a struck-through
+   name in the interface's only red, so a glance down the order tells you who
+   is still in the fight. */
+.fighter.dead { opacity: 0.75; }
+
+.fighter-name.dead {
+  color: var(--color-danger);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.fighter-dead {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
 .fighter-head { display: flex; align-items: center; gap: 8px; }
 .fighter-init {
   font-family: var(--font-heading);

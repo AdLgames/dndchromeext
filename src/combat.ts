@@ -243,8 +243,27 @@ const TARGET_ADV = ["blinded", "paralyzed", "petrified", "restrained", "stunned"
 /** A hit from within 5 ft on these is automatically a critical. */
 const AUTO_CRIT = ["paralyzed", "unconscious"];
 
+/**
+ * A player character at 0 is dying and only dead once three death saves have
+ * failed; anything else dies outright at 0, which is what 5e says and what
+ * the table expects to see written in the log.
+ */
+export function isDead(c: Combatant): boolean {
+  return c.isPlayer ? c.deathSaves.failures >= 3 : c.hp <= 0;
+}
+
+/**
+ * Confirming death ends the dying state. A corpse is not unconscious — that
+ * is the condition for someone who might still get up — though it stays
+ * prone, because it is on the floor.
+ */
+export function settleDeath(c: Combatant): Combatant {
+  if (!isDead(c) || !c.conditions.includes("unconscious")) return c;
+  return { ...c, conditions: c.conditions.filter((id) => id !== "unconscious") };
+}
+
 export function canAct(c: Combatant): boolean {
-  return !c.conditions.some((id) => CANT_ACT.includes(id)) && c.hp > 0;
+  return !c.conditions.some((id) => CANT_ACT.includes(id)) && c.hp > 0 && !isDead(c);
 }
 
 export function effectiveSpeed(c: Combatant): number {
@@ -371,7 +390,9 @@ export function logEvent(encounter: Encounter, event: Omit<CombatEvent, "at">): 
 export function applyDamage(c: Combatant, amount: number): Combatant {
   const absorbed = Math.min(c.tempHp, amount);
   const hp = Math.max(0, c.hp - (amount - absorbed));
-  const conditions = hp === 0 && !c.conditions.includes("unconscious")
+  // Only a player character falls unconscious at 0 — a monster is simply
+  // dead, and tagging its corpse "unconscious" read as if it might get up.
+  const conditions = hp === 0 && c.isPlayer && !c.conditions.includes("unconscious")
     ? [...c.conditions, "unconscious", ...(c.conditions.includes("prone") ? [] : ["prone"])]
     : c.conditions;
   return { ...c, tempHp: c.tempHp - absorbed, hp, conditions };
@@ -499,7 +520,7 @@ export async function getEncounter(): Promise<Encounter> {
     order: saved.order ?? [],
     started: saved.started ?? false,
     dmOverride: saved.dmOverride ?? false,
-    combatants: (saved.combatants ?? []).map((c) => ({
+    combatants: (saved.combatants ?? []).map((c) => settleDeath({
       ...blank(c.name ?? "Unnamed"),
       ...c,
       actions: c.actions ?? [],
@@ -513,7 +534,10 @@ export async function getEncounter(): Promise<Encounter> {
 }
 
 export async function saveEncounter(encounter: Encounter): Promise<void> {
-  await chrome.storage.local.set({ [ENCOUNTER_KEY]: encounter });
+  // One place to settle death, so it holds however the tally got to three —
+  // a rolled save, a clicked pip, or an encounter saved before this existed.
+  const combatants = encounter.combatants.map(settleDeath);
+  await chrome.storage.local.set({ [ENCOUNTER_KEY]: { ...encounter, combatants } });
 }
 
 export function onEncounterChanged(fn: (encounter: Encounter) => void): void {

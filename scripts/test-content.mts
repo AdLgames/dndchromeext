@@ -43,8 +43,9 @@ store["rulesOverlay:portraits"] = {
 const text = await exportContent();
 const file = JSON.parse(text);
 assert(file.format === "rules-overlay-content" && file.version === 2, "export writes the current format");
-assert(Object.keys(file.portraits).length === 2, "export carries only its own pictures");
-assert(!("monster-goblin" in file.portraits), "export leaves bundled entries' pictures behind");
+assert(Object.keys(file.portraits).length === 3, "export carries every uploaded picture");
+assert("monster-goblin" in file.portraits,
+  "a picture put on a published entry is still the user's, and travels with the file");
 
 // --- parse
 const bundle = parseContentFile(text);
@@ -65,7 +66,7 @@ assert((await getParty()).length === 2, "the imported character joins the one al
 assert((await getParty()).filter((c) => c.name === "Brannor").length === 1,
   "re-importing the same file does not duplicate the character");
 assert((await getParty()).some((c) => c.id === hero.id), "a character keeps their id, so their picture still points at them");
-assert(Object.keys(await getPortraits()).length >= 2, "pictures come across");
+assert(Object.keys(await getPortraits()).length >= 3, "pictures come across");
 
 // --- a v1 party file still loads
 const legacy = JSON.stringify({
@@ -99,3 +100,27 @@ const badPortraits = parseContentFile(JSON.stringify({
   portraits: { a: "https://example.com/x.png", b: "javascript:alert(1)", c: "data:image/jpeg;base64,ZZZZ" },
 }));
 assert(Object.keys(badPortraits.portraits).join() === "c", "only data-URL pictures are kept");
+
+// --- death: a monster dies at 0, a player is only dying until three saves fail
+const { applyDamage, canAct, isDead } = await import("../src/combat.js");
+const body = (over: Record<string, unknown>) => ({
+  id: "x", name: "X", initiative: 10, ac: 12, hp: 10, maxHp: 10, tempHp: 0, speed: 30,
+  movementUsed: 0, conditions: [] as string[], concentrating: false, concentrationNote: "",
+  reactionUsed: false, deathSaves: { successes: 0, failures: 0 }, isPlayer: false,
+  actions: [], abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+  saveBonuses: {}, profBonus: 2, actionUsed: false, bonusUsed: false, ...over,
+}) as Parameters<typeof applyDamage>[0];
+
+const felledBeast = applyDamage(body({}), 30);
+assert(felledBeast.hp === 0 && isDead(felledBeast), "a monster at 0 HP is dead");
+assert(!felledBeast.conditions.includes("unconscious"), "a dead monster is not labelled unconscious");
+assert(!canAct(felledBeast), "a dead monster cannot act");
+
+const felledHero = applyDamage(body({ isPlayer: true }), 30);
+assert(felledHero.hp === 0 && !isDead(felledHero), "a player at 0 HP is dying, not dead");
+assert(felledHero.conditions.includes("unconscious") && felledHero.conditions.includes("prone"),
+  "a downed player is unconscious and prone");
+assert(isDead(body({ isPlayer: true, hp: 0, deathSaves: { successes: 0, failures: 3 } })),
+  "three failed death saves is death");
+assert(!canAct(body({ isPlayer: true, hp: 5, deathSaves: { successes: 0, failures: 3 } })),
+  "death sticks even if hit points come back without clearing the tally");
