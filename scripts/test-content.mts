@@ -269,3 +269,65 @@ assert(orphan.every((b) => b.kind === "paragraph"),
   "a caption with no table under it is left as text");
 assert(orphan[0].kind === "paragraph" && orphan[0].text.startsWith("_Table: Nothing Follows"),
   "and is kept verbatim rather than being silently dropped");
+
+// --- spell shapes and upcasting, read out of the spell's own prose
+const { spellShape, spellScaling, diceAtLevel } = await import("../src/spells.js");
+const spell = (over: Record<string, unknown>) => ({
+  id: "s", title: "S", group: "spells", category: "evocation", body: "",
+  spell: {
+    level: 3, school: "evocation", castingTime: "1 action", range: "150 feet",
+    components: "V, S", duration: "Instantaneous", concentration: false, ritual: false, classes: [],
+  },
+  ...over,
+}) as Rule;
+
+const shapeOf = (body: string, over: Record<string, unknown> = {}) =>
+  spellShape(spell({ body, ...over }));
+
+assert(shapeOf("Each creature in a 20-foot-radius sphere")?.kind === "sphere", "a sphere is read off the text");
+assert(shapeOf("Each creature in a 20-foot-radius sphere")?.size === 20, "with its radius in feet");
+assert(shapeOf("a 60-foot cone")?.kind === "cone", "a cone is recognised");
+assert(shapeOf("a 15-foot cube originating from you")?.kind === "cube", "a cube is recognised");
+assert(shapeOf("a line 100 feet long and 5 feet wide")?.extent === 5, "an explicit line keeps its width");
+assert(shapeOf("a line 100 feet long and 5 feet wide")?.size === 100, "and its length");
+// The looser rule must not fire on prose that merely mentions a length.
+assert(shapeOf("you create a rope 60 feet long")?.kind !== "line",
+  "a rope 60 feet long is not an area of effect");
+assert(shapeOf("a wall of fire up to 60 feet long")?.kind === "line", "a wall is a line");
+assert(shapeOf("a 10-foot-radius, 20-foot-tall cylinder")?.kind === "cylinder", "a cylinder is recognised");
+
+// With no area, how the spell reaches is worth showing instead.
+assert(shapeOf("", { spell: { ...spell({}).spell!, range: "Touch" } })?.kind === "touch", "touch spells show reach");
+assert(shapeOf("", { spell: { ...spell({}).spell!, range: "Self" } })?.kind === "self", "self spells show self");
+assert(shapeOf("")?.kind === "target", "a ranged spell with no area is a single target");
+assert(shapeOf("", { spell: { ...spell({}).spell!, range: "Special" } }) === null,
+  "an unparseable range gets no diagram rather than a wrong one");
+
+// --- scaling
+const fireball = spell({
+  body: "A target takes 8d6 fire damage",
+  spell: { ...spell({}).spell!, higherLevel: "the damage increases by 1d6 for each slot level above 3rd" },
+});
+const fbScale = spellScaling(fireball)!;
+assert(fbScale.kind === "slot", "a levelled spell scales by slot");
+assert(diceAtLevel(fbScale, 3).expr === "8d6", "at its own level it rolls its base");
+assert(diceAtLevel(fbScale, 5).expr === "10d6", "two slots up adds two dice");
+assert(diceAtLevel(fbScale, 9).expr === "14d6", "and six slots up adds six");
+
+const cantrip = spell({
+  level: 0,
+  body: "takes 1d10 fire damage. This spell's damage increases by 1d10 when you reach 5th level (2d10), 11th level (3d10), and 17th level (4d10).",
+  spell: { ...spell({}).spell!, level: 0 },
+});
+const cScale = spellScaling(cantrip)!;
+assert(cScale.kind === "cantrip", "a cantrip scales by character level");
+assert(diceAtLevel(cScale, 4).expr === "1d10", "below the first step it rolls its base");
+assert(diceAtLevel(cScale, 5).expr === "2d10", "at 5th it steps up");
+assert(diceAtLevel(cScale, 20).expr === "4d10", "and stops at the last step");
+
+assert(spellScaling(spell({ body: "You create three glowing darts" })) === null,
+  "a spell with no dice has nothing to scale");
+assert(spellScaling(spell({
+  body: "takes 2d8 damage",
+  spell: { ...spell({}).spell!, higherLevel: "the duration increases by 1 hour for each slot level above 3rd" },
+})) === null, "scaling that is not dice — duration, range — is left alone");

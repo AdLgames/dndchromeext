@@ -1079,6 +1079,89 @@
   }
 }
 
+/* ------------------------------------------------------- spell diagram -- */
+.spell-tools {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding: 14px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.aoe-fig { margin: 0; flex: none; }
+
+.aoe-fig figcaption {
+  margin-top: 5px;
+  text-align: center;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+}
+
+.aoe {
+  display: block;
+  border: 1px solid var(--color-divider);
+  border-radius: 3px;
+  background: var(--color-bg);
+}
+
+/* The grid is scenery — present enough to count squares against, quiet
+   enough that the shape on top is what you see first. */
+.aoe-grid line {
+  stroke: var(--color-divider);
+  stroke-width: 0.5;
+  opacity: 0.55;
+}
+
+.aoe-area {
+  fill: var(--color-accent-300);
+  fill-opacity: 0.5;
+  stroke: var(--color-accent);
+  stroke-width: 1.5;
+}
+
+.aoe-origin circle {
+  fill: var(--color-accent-900);
+  stroke: var(--color-bg);
+  stroke-width: 1.5;
+}
+
+.aoe-measure {
+  stroke: var(--color-accent-800);
+  stroke-width: 1.2;
+}
+
+.aoe-dashed { stroke-dasharray: 3 3; }
+
+.upcast {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  flex: 1 1 190px;
+}
+
+.upcast-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.upcast-level {
+  font-family: var(--font-heading);
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+  min-width: 22px;
+  text-align: center;
+  color: var(--color-accent-800);
+}
+
+.upcast-note { font-size: 12px; color: var(--color-neutral-700); }
+
 /* Tables come out of the source as pipe markdown padded to a few hundred
    characters a line. Rendered as prose that is a wall of dashes, so they get
    to be tables — scrolling sideways inside their own box rather than

@@ -24,6 +24,8 @@ import {
   setPortrait, type Portraits,
 } from "../portraits";
 import { scaleStatBlock } from "../scale";
+import { diceAtLevel, spellScaling, spellShape, type SpellScaling } from "../spells";
+import { aoeDiagram } from "./aoe";
 import { clearPins, getPins, onPinsChanged, togglePin } from "../pins";
 import {
   buildAliasIndex, crValue, findHighlight, getRecency, isFilterActive, matchesFilter,
@@ -179,6 +181,8 @@ export class Panel {
   private attackMode: "normal" | "adv" | "dis" = "normal";
   private hpDelta = new Map<string, number>();
   private renamingId: string | null = null;
+  /** Slot (or character) level the open spell is being cast at. */
+  private castLevel: number | null = null;
   private undoStack: Encounter[] = [];
   private xpTable: Map<string, number> | null = null;
   private input: HTMLInputElement | null = null;
@@ -344,7 +348,7 @@ export class Panel {
 
   private open(rule: Rule, pushHistory = true) {
     if (pushHistory) this.pushHistory();
-    if (rule.id !== this.detail?.id) this.scaleDelta = 0;
+    if (rule.id !== this.detail?.id) { this.scaleDelta = 0; this.castLevel = null; }
     this.detail = rule;
     this.view = "detail";
     this.explain = false;
@@ -1598,6 +1602,40 @@ export class Panel {
     return out;
   }
 
+  /**
+   * Casting a spell higher changes what you roll, and working that out at the
+   * table is the sort of arithmetic worth handing to a machine. The stepper
+   * moves the slot; the button rolls whatever that slot comes to.
+   */
+  private upcast(rule: Rule, scaling: SpellScaling): HTMLElement {
+    const isCantrip = scaling.kind === "cantrip";
+    const min = isCantrip ? 1 : scaling.baseLevel;
+    const max = isCantrip ? 20 : 9;
+    const level = Math.min(max, Math.max(min, this.castLevel ?? min));
+    const { expr, note } = diceAtLevel(scaling, level);
+
+    const step = (delta: number) => el("button", {
+      class: "mini-btn",
+      disabled: level + delta < min || level + delta > max,
+      onclick: () => { this.castLevel = level + delta; this.render(); },
+      text: delta > 0 ? "+" : "−",
+    });
+
+    return el("div", { class: "upcast" }, [
+      el("span", { class: "label", text: isCantrip ? "At character level" : "Cast with a slot of level" }),
+      el("div", { class: "upcast-row" }, [
+        step(-1),
+        el("span", { class: "upcast-level", text: String(level) }),
+        step(1),
+        el("button", {
+          class: "qa-btn",
+          onclick: () => this.doRoll(expr, `${rule.title} at level ${level}`),
+        }, [icon("dice", 14), expr]),
+        note ? el("span", { class: "upcast-note", text: note }) : null,
+      ]),
+    ]);
+  }
+
   private renderSpell(rule: Rule): HTMLElement[] {
     const s = rule.spell!;
     const meta = [
@@ -1609,7 +1647,22 @@ export class Panel {
     ].filter(Boolean) as HTMLElement[];
 
     const out: HTMLElement[] = [el("div", { class: "section-body" }, meta)];
-    out.push(el("div", { class: "section-body" }, [prose(rule.body, (expr) => this.doRoll(expr, rule.title))]));
+
+    const shape = spellShape(rule);
+    const scaling = spellScaling(rule);
+    if (shape || scaling) {
+      out.push(el("div", { class: "spell-tools" }, [
+        shape
+          ? el("figure", { class: "aoe-fig" }, [
+              aoeDiagram(shape),
+              el("figcaption", { text: shape.label }),
+            ])
+          : null,
+        scaling ? this.upcast(rule, scaling) : null,
+      ]));
+    }
+
+    out.push(el("div", { class: "section-body" }, [richText(rule.body, (expr) => this.doRoll(expr, rule.title))]));
     if (s.higherLevel) {
       out.push(...this.section("higher", "At higher levels", null, () => [
         el("div", { class: "section-body" }, [prose(s.higherLevel!, (expr) => this.doRoll(expr, rule.title))]),

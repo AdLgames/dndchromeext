@@ -74,6 +74,21 @@ ordinary text.
   It understands a deliberately small set of questions; anything it doesn't
   recognise just falls through to the rules lookup it would have shown
   anyway.
+- **Every spell gets a diagram.** A sphere, cone, cube, line or cylinder is
+  drawn to scale on a five-foot grid with the caster's position marked, so
+  "20-foot radius" becomes four squares you can count onto a battle map.
+  Spells with no area show how they reach instead — touch, self, or a single
+  target at range. The shape is read out of the spell's own prose, since 5e
+  keeps it there and not in any structured field; a wording that isn't
+  recognised gets no diagram rather than a wrong one (369 of 377 spells are
+  covered).
+- **Cast it higher and it rolls higher.** Spells that grow with the slot get
+  a stepper: move the slot level and the dice follow — Fireball at 3rd is
+  8d6, at 9th it's 14d6 — with a button to roll whatever that comes to.
+  Cantrips step on character level instead (Fire Bolt: 1d10, then 2d10 at
+  5th, 3d10 at 11th, 4d10 at 17th). Spells whose higher-level note changes
+  the duration or the number of targets rather than the dice are left alone,
+  because there is nothing there to roll.
 - **Tables are tables.** Where an entry's text carries a `d20 | Effect`
   roll table, it is rendered as one — with the die results in their own
   column and the dice inside still clickable — rather than as the wall of
@@ -300,6 +315,7 @@ src/
   pins.ts                  # pinned entry ids
   party.ts                  # party roster storage
   homebrew.ts                # your own entries + coercion of untrusted JSON
+  spells.ts                   # area shapes and upcast scaling, parsed from prose
   portraits.ts                # your own pictures, downscaled into local storage
   backup.ts                    # one export/import bundle: party + homebrew + pictures
   combat.ts                  # turn order, action economy, condition effects, resolution
@@ -308,6 +324,7 @@ src/
     panel.ts                # the whole panel: browse, results, detail, pins, settings
     dom.ts                   # element builder, Lucide-style icons, match highlighting
     markup.ts                 # body text -> paragraphs and roll tables (DOM-free, tested)
+    aoe.ts                     # the spell area diagrams
     emblem.ts                  # generated per-entry artwork (see below)
     theme.css                 # design tokens (light + dark)
     panel.css                  # component layer shared by both surfaces
