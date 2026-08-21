@@ -10,7 +10,7 @@ order the developer dashboard presents them.
 **Name** (max 75)
 
 ```
-Rules Overlay for D&D 5e
+Overlay for 5e - rules - combat - homebrew
 ```
 
 > ⚠️ See "Before you submit" at the bottom — the name is the one thing worth
