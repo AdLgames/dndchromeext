@@ -6,12 +6,12 @@
   "type": "module",
   "scripts": {
     "build:rules": "tsx scripts/build-rules.ts",
-    "build:icons": "node scripts/gen-icons.mjs",
     "build:ext": "node esbuild.config.mjs",
-    "build": "npm run build:rules && npm run build:icons && npm run build:ext",
-    "dev": "npm run build:rules && npm run build:icons && node esbuild.config.mjs --watch",
+    "build": "npm run build:rules && npm run build:ext",
+    "dev": "npm run build:rules && node esbuild.config.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "test": "tsx scripts/test-content.mts"
+    "test": "tsx scripts/test-content.mts",
+    "icons": "node scripts/rasterise-icons.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.270",

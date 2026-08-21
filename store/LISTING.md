@@ -160,3 +160,26 @@ legally reuse the source. Fine if that is deliberate; add a `LICENSE` if not.
 $5 registration. First reviews commonly take a few days, and can take longer
 for an extension requesting access to all sites — expect questions about
 that permission, which the justification above is written to answer.
+
+---
+
+## Icon
+
+`icons/icon{16,48,128}.png`, drawn from the SVG masters beside them and
+regenerated with `npm run icons`.
+
+A d20 inside the diamond that the panel header already uses as its mark, in
+the Book theme's own `--color-bg` on `--color-accent`. The previous icon was
+a white diamond on violet — a colour that appears nowhere else in the
+product.
+
+The 16px is drawn differently from the other two, and deliberately: at that
+size the diamond outline and the die outline fuse into a blobby ring with no
+die visible in it. It is redrawn as a solid diamond with the die's face
+knocked out of it, so the contrast carrying the shape is fill against
+knockout rather than two thin strokes two pixels apart. Checked at native
+size against both Chrome toolbars, light and dark.
+
+If you want a 440×280 promotional tile as well, the same mark on a
+`--color-accent-900` ground with the wordmark beside it would suit — that one
+is optional and the listing works without it.

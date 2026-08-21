@@ -1,0 +1,8 @@
+<!-- 16px: the die and the diamond are redrawn as one solid mark with the
+     face knocked out. Two concentric outlines at this size fuse into a
+     blobby ring — fill against knockout is the contrast that survives. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="16" height="16">
+  <rect width="48" height="48" fill="#f4ece1"/>
+  <path d="M24 3 45 24 24 45 3 24Z" fill="#bd6c45"/>
+  <path d="M24 15L33 31H15Z" fill="#f4ece1"/>
+</svg>

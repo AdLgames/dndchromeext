@@ -295,6 +295,7 @@ the install should not be advertised to every page you visit.
 
 ```sh
 npm run dev          # build once (unminified, sourcemapped) and watch
+npm run icons        # redraw icons/*.png from icons/*.svg (needs Chrome)
 npm run typecheck    # tsc --noEmit
 npm test             # export/import round-trip and untrusted-input checks
 npm run build:rules  # regenerate src/data/rules.json from data-src/
@@ -348,7 +349,8 @@ scripts/
   build-rules.ts                       # validates data-src/*.json -> src/data/rules.json
   import-srd-content.mjs                # importer: 5e-bits/5e-database (SRD 5.1) -> data-src/
   import-open5e.mjs                      # importer: open5e-api (A5E, Black Flag) -> data-src/
-  gen-icons.mjs                          # generates icons/*.png (zero-dependency PNG encoder)
+  rasterise-icons.mjs                    # icons/*.svg -> icons/*.png (npm run icons)
+  crop-png.mjs                            # trims headless Chrome's screenshot band
   test-content.mts                        # npm test: export/import + untrusted-input checks
 ```
 
