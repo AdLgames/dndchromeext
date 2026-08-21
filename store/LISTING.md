@@ -71,6 +71,10 @@ YOUR OWN CONTENT
 • Attach your own pictures to anything
 • Export the lot — characters, homebrew and pictures — as one file
 
+SUPPORT
+Free, with no account and nothing collected. If it saves you time at the
+table: https://buymeacoffee.com/veox
+
 PRIVACY
 No account, no server, no analytics, no telemetry, no network requests at
 all. Everything is stored on your own machine. The full policy is at

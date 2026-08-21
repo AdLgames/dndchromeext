@@ -247,6 +247,12 @@ The panel header carries four buttons: **pinned**, **your party**, the
 it, so the party is one click away from wherever you are rather than buried
 in settings.
 
+Settings also carries a **Buy me a coffee** link
+(<https://buymeacoffee.com/veox>). It is a plain anchor rather than a
+`chrome.tabs.create` call, because the overlay is a content script with no
+tabs API and the service worker that stands in for it opens only the
+extension's own pages, by design.
+
 ### Settings
 
 Open settings from the panel header (the sliders icon) to choose which

@@ -47,6 +47,8 @@ import {
 import { el, highlighted, icon, prose, richText } from "./dom";
 import { emblem, emblemFor } from "./emblem";
 
+const COFFEE_URL = "https://buymeacoffee.com/veox";
+
 const SRD_ATTRIBUTION =
   "Includes material from the D&D System Reference Document 5.1, © Wizards of the Coast LLC, CC BY 4.0.";
 
@@ -2874,6 +2876,22 @@ export class Panel {
               (next) => ({ keepPinned: next })),
             behaviorRow("Look up selected text", "Shortcut Ctrl+Shift+D", this.settings.selectionLookup,
               (next) => ({ selectionLookup: next })),
+          ]),
+        ]),
+        el("div", { class: "set-group" }, [
+          el("span", { class: "label", text: "Support" }),
+          el("div", { class: "support" }, [
+            el("p", { class: "support-line", text:
+              "This is free, has no account and collects nothing. If it has saved you time at the table, you can buy me a coffee." }),
+            // A real link rather than chrome.tabs.create: the overlay is a
+            // content script with no tabs API, and the worker that stands in
+            // for it deliberately opens only our own pages.
+            el("a", {
+              class: "support-link",
+              href: COFFEE_URL,
+              target: "_blank",
+              rel: "noopener noreferrer",
+            }, [icon("coffee", 14), "Buy me a coffee"]),
           ]),
         ]),
       ]),
