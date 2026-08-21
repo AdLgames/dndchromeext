@@ -10,16 +10,13 @@ order the developer dashboard presents them.
 **Name** (max 75)
 
 ```
-Rules Overlay for D&D 5e
+Overlay for 5e - Rules - Combat - Homebrew
 ```
-
-> ⚠️ See "Before you submit" at the bottom — the name is the one thing worth
-> deciding on before you upload.
 
 **Short description** (max 132 — this is the manifest `description`)
 
 ```
-Press a hotkey, type a rule or table-slang, get the D&D 5e SRD answer inline. Bundled, offline, no network calls.
+Hotkey rules lookup for 5e: type a rule or table-slang, get the SRD answer. Combat tracker and homebrew. Offline, no network calls.
 ```
 
 **Category:** Productivity
@@ -139,23 +136,16 @@ https://github.com/AdLgames/dndchromeext/blob/main/PRIVACY.md
 
 ## Before you submit
 
-**1. The name.** "D&D" and "Dungeons & Dragons" are Wizards of the Coast
-trademarks. The SRD's licence does not help here: CC BY 4.0 says in terms
+**1. The name — done.** The listing is now "Overlay for 5e - Rules - Combat
+- Homebrew". The reasoning it was changed for: "D&D" and "Dungeons & Dragons"
+are Wizards of the Coast trademarks. The SRD's licence does not help here: CC BY 4.0 says in terms
 that "Patent and trademark rights are not licensed under this Public
 License". Using the SRD's *text* is fine and is what the licence is for;
 putting the trademark in a product name is a separate question, and it is the
 sort of thing that gets a listing pulled after it has users rather than
-before. Most third-party tools avoid it — "5e" alone reads as generic. A
-safer name would be something like:
-
-```
-Rules Overlay for 5e
-```
-
-with the SRD attribution and the "not affiliated with Wizards of the Coast"
-line kept in the description exactly as above. Changing it means editing
-`manifest.json` and the short description. This is a judgement call, not a
-certainty — but it is cheaper to make now than later.
+before. Most third-party tools avoid it — "5e" alone reads as generic. The SRD
+attribution and the "not affiliated with Wizards of the Coast" line stay in
+the description regardless, and both are still there.
 
 **2. A code licence.** The repository has none, which means nobody else may
 legally reuse the source. Fine if that is deliberate; add a `LICENSE` if not.

@@ -667,7 +667,7 @@ export class Panel {
   private renderRail(): HTMLElement {
     return el("div", { class: "rail" }, [
       icon("diamond", 18),
-      el("span", { class: "rail-name", text: "Rules Overlay" }),
+      el("span", { class: "rail-name", text: "Overlay for 5e" }),
       this.pins.length ? el("span", { class: "rail-count", text: String(this.pins.length) }) : null,
     ]);
   }
@@ -891,7 +891,7 @@ export class Panel {
   private renderHeader(): HTMLElement {
     return el("div", { class: "head" }, [
       icon("diamond", 16),
-      el("span", { class: "brand", text: "Rules Overlay" }),
+      el("span", { class: "brand", text: "Overlay for 5e" }),
       el("span", { class: "brand-sub", text: "5e SRD" }),
       this.headActions(),
     ]);

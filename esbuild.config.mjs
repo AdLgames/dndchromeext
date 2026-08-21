@@ -27,7 +27,12 @@ const buildOptions = {
 
 function copyStatic() {
   cpSync("manifest.json", `${outdir}/manifest.json`);
-  cpSync("icons", `${outdir}/icons`, { recursive: true });
+  // Only the PNGs the manifest names — the SVG masters are source art and
+  // have no business inside the published package.
+  mkdirSync(`${outdir}/icons`, { recursive: true });
+  for (const size of [16, 48, 128]) {
+    cpSync(`icons/icon${size}.png`, `${outdir}/icons/icon${size}.png`);
+  }
   cpSync("src/options/options.html", `${outdir}/options.html`);
   cpSync("src/sidepanel/sidepanel.html", `${outdir}/sidepanel.html`);
   cpSync("src/party/party.html", `${outdir}/party.html`);

@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Rules Overlay for D&D 5e",
+  "name": "Overlay for 5e - Rules - Combat - Homebrew",
   "version": "1.0.0",
-  "description": "Press a hotkey, type a rule or table-slang, get the D&D 5e SRD answer inline. Bundled, offline, no network calls.",
+  "description": "Hotkey rules lookup for 5e: type a rule or table-slang, get the SRD answer. Combat tracker and homebrew. Offline, no network calls.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "Rules Overlay \u2014 open the side panel"
+    "default_title": "Overlay for 5e \u2014 open the side panel"
   },
   "background": {
     "service_worker": "background.js"
@@ -67,7 +67,7 @@
         "data/sources.json"
       ],
       "matches": [
-        "<all_urls>"
+        "*://*/*"
       ],
       "use_dynamic_url": true
     }

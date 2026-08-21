@@ -1,4 +1,4 @@
-# Privacy policy — Rules Overlay for D&D 5e
+# Privacy policy — Overlay for 5e - Rules - Combat - Homebrew
 
 **Last updated: 21 August 2026**
 

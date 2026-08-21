@@ -1,4 +1,4 @@
-# Rules Overlay for D&D 5e
+# Overlay for 5e - Rules - Combat - Homebrew
 
 A hotkey-triggered rules lookup overlay for D&D 5e players. Press a key
 anywhere in the browser, type a partial rule or table-slang, get the rule
