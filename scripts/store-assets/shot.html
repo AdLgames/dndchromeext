@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><title>shot</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;font-family:Georgia,serif;background:#2b2f36}
+  /* A stand-in for the VTT or wiki the panel sits beside. */
+  .page{position:fixed;inset:0;background:#2b2f36;color:#c9c4bb;padding:56px 64px;box-sizing:border-box}
+  .page h1{font-size:30px;margin:0 0 6px;color:#e6e0d6;letter-spacing:.01em}
+  .page p{max-width:52ch;line-height:1.7;font-size:15px;color:#9a958d}
+  .grid{position:absolute;inset:0;background-image:linear-gradient(#ffffff08 1px,transparent 1px),linear-gradient(90deg,#ffffff08 1px,transparent 1px);background-size:44px 44px}
+  .tokens{position:absolute;left:64px;top:230px;display:flex;gap:26px}
+  .tok{width:44px;height:44px;border-radius:50%;border:2px solid #7d8794;display:grid;place-items:center;color:#e6e0d6;font-size:13px;background:#3a4049}
+  .tok.foe{border-color:#a8563c;background:#42322c}
+  #frame{position:fixed;top:0;bottom:0;right:0;width:430px;height:100%;border:0;border-left:1px solid #00000055;box-shadow:-18px 0 48px #0006}
+</style>
+<body>
+  <div class="page">
+    <div class="grid"></div>
+    <h1>The Sunken Vault — Session 14</h1>
+    <p>The passage opens onto a flooded chamber. Three shapes move beneath the surface, and something older watches from the far gallery.</p>
+    <div class="tokens">
+      <div class="tok">PC</div><div class="tok">PC</div><div class="tok">PC</div>
+      <div class="tok foe">✦</div><div class="tok foe">✦</div>
+    </div>
+  </div>
+  <iframe id="frame"></iframe>
+<script>
+  const p = new URLSearchParams(location.search);
+  document.getElementById("frame").src = "sidepanel.html?" + (p.get("panel") || "");
+</script>

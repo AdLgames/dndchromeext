@@ -1,5 +1,7 @@
 node_modules/
 dist/
 *.zip
+.shots/
+.store-shots/
 *.log
 .DS_Store
